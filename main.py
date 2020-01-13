@@ -35,28 +35,49 @@ NET_NAME = 'ResNet50V2'
 
 
 def set_and_split_data():
-    pass
+    '''set the images and split them'''
+    train = {'data': [],
+             'labels': []}
+    test = {'data': [],
+            'labels': []}
+    return train, test
 
 
 def reconstruct_net(s, num_classes, net_name):
-    pass
+    '''export the net without the last layer'''
+    basic_model = ' '
+    return basic_model
 
 
 def train_model(res_net_basic, train, batch_size, epochs, verbose):
-    pass
+    trained_model = ' '
+    return trained_model
 
 
 def test_model(model, test, batch_size, verbose):
+    '''test and prints accuracy'''
     pass
 
 
 def error_type(predictions, test_labels):
+    '''returns a vector of all error types'''
+    error_type = []
+    return error_type
+
+
+def tuning():
+    '''tune hyper parameters to improve the model'''
     pass
 
 
 def recall_precision_curve():
+    '''creates precision curve'''
     pass
 
+
+def report_results(predictions, error_type_array):
+    '''prints the wrong images'''
+    pass
 
 ################# main ####################
 def main():
@@ -71,8 +92,7 @@ def main():
     predictions = model.predict(test)
     error_type_array = error_type(predictions, test['labels'])  # find the error types
     recall_precision_curve(test['labels'], predictions)  # recall-precision curve
-    #report_results(predictions, score_matrix, params['data']['data_path'],test_data['labels'],
-    # params['data']['image_path'], params['data']['number_of_test_img'],params['data']['class_indices'])
+    report_results(predictions, error_type_array)
 
 
 if __name__ == "__main__":
