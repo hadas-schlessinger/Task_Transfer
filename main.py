@@ -34,7 +34,28 @@ VERBOSE = 1
 # helper = keras.utils.to_categorical(lbls, numberofclasses)
 
 
+def set_and_split_data():
+    pass
 
+
+def reconstruct_net(s, num_classes, model_name):
+    pass
+
+
+def train_model(res_net_basic, train, batch_size, epochs, verbose):
+    pass
+
+
+def test_model(model, test, batch_size, verbose):
+    pass
+
+
+def error_type(predictions, test_labels):
+    pass
+
+
+def recall_precision_curve():
+    pass
 
 
 ################# main ####################
@@ -52,7 +73,6 @@ def main():
     recall_precision_curve(test['labels'], predictions)  # recall-precision curve
     #report_results(predictions, score_matrix, params['data']['data_path'],test_data['labels'],
     # params['data']['image_path'], params['data']['number_of_test_img'],params['data']['class_indices'])
-
 
 
 if __name__ == "__main__":
