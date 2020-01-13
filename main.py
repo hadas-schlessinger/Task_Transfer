@@ -27,7 +27,7 @@ BATCH_SIZE = 16
 CNN_BACKEND = 'Tensorflow'
 EPOCHS = 5
 VERBOSE = 1
-
+NET_NAME = 'ResNet50V2'
 
 # DictinaryLbl = sio.loadmat(matlabfile, mdict=None, appendmat=True)
 # lbls = np.transpose(DictinaryLbl['Labels']).tolist()  # list of labels
@@ -38,7 +38,7 @@ def set_and_split_data():
     pass
 
 
-def reconstruct_net(s, num_classes, model_name):
+def reconstruct_net(s, num_classes, net_name):
     pass
 
 
@@ -65,7 +65,7 @@ def main():
     np.random.seed(0)  # seed
     train, test = set_and_split_data()
     # tuning_error_per_set, errors = tuning(train)
-    res_net_basic = reconstruct_net(S, NUMBER_OF_CLASSES, model_name)  # preparing the network
+    res_net_basic = reconstruct_net(S, NUMBER_OF_CLASSES, NET_NAME)  # preparing the network
     model = train_model(res_net_basic, train, BATCH_SIZE, EPOCHS, VERBOSE) # train and validation stage
     test_model(model, test, BATCH_SIZE, VERBOSE)  # test stage
     predictions = model.predict(test)
