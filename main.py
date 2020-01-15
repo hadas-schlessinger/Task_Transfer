@@ -113,10 +113,52 @@ def test_model(model, test, batch_size, verbose):
 
 
 def error_type(predictions, test_labels):
-    '''returns a vector of all error types'''
-    error_type = []
-    return error_type
+    """returns a vector of all error types
+    "Type 1: miss-detection: the algorithm thought it is not an flower, but it is
+    Type 2: false alarm: the algorithm thought it is an flower, but it is not """
+    errors = {'type 1': [], 'type 2': []}
+    errors['type 1'] = {'index': [], 'score': []}
+    errors['type 2'] = {'index': [], 'score': []}
 
+    score_type_1 = []
+    score_type_2 = []
+
+    for i in range(len(predictions)):
+        predict_1 = predictions[i][1]
+        if predict_1 <= 0.5 and test_labels[i][1] == 1:  # type 1: thought it's not flower(0) but it's (1)
+            score_type_1.append((i+301, predict_1))#wich score?
+        if predict_1 > 0.5 and test_labels[i][0] == 1:  # type 2: thought it's flower (1) but it's not (0)
+            score_type_2.append((i+301, predict_1))
+
+    score_type_1.sort(key = takeSecond)
+    score_type_2.sort(key = takeSecond)
+
+    Max_score_type_1 = score_type_1[0:min(len(score_type_1),5)]
+    Max_score_type_2 = score_type_2[0:min(len(score_type_2),5)]
+
+    if len(Max_score_type_1) != 0:
+        for i in range(5):
+            print("Error type 1, ", "Index :" + str(takefirst(Max_score_type_1[i])), "Picture number and score: " + str(takeSecond(Max_score_type_1[i])))
+    else:
+        print("There is no type 2 errors")
+
+    if len(Max_score_type_2) != 0:
+        for i in range(5):
+            print("Error type 2, ", "Index :" + str(takefirst(Max_score_type_2[i])), "Picture number and score: " + str(takeSecond(Max_score_type_2[i])))
+    else:
+        print("There is no type 2 errors")
+
+    #all errors
+    errors['type 1'] = {'index': takefirst(score_type_1), 'distance': takeSecond(score_type_1)}
+    errors['type 2'] = {'index': takefirst(score_type_2), 'distance': takeSecond(score_type_2)}
+
+    return errors
+
+def takeSecond(elem):
+    return elem[1] #sort by second element function
+
+def takefirst(elem):
+    return elem[0] #sort by second element function
 
 def tuning():
     '''tune hyper parameters to improve the model'''
@@ -143,10 +185,10 @@ def main():
     res_net_basic = reconstruct_net(S, NUMBER_OF_CLASSES, NET_NAME)  # preparing the network
     model = train_model(res_net_basic, train, BATCH_SIZE, EPOCHS, VERBOSE) # train and validation stage
     test_model(model, test, BATCH_SIZE, VERBOSE)  # test stage
-    # predictions = model.predict(test)
-    # error_type_array = error_type(predictions, test['labels'])  # find the error types
-    # recall_precision_curve(test['labels'], predictions)  # recall-precision curve
-    # report_results(predictions, error_type_array)
+    predictions = model.predict(test)
+    error_type_array = error_type(predictions, test['labels'])  # find the error types
+    #recall_precision_curve(test['labels'], predictions)  # recall-precision curve
+    report_results(predictions, error_type_array)
 
 
 if __name__ == "__main__":
