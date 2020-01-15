@@ -15,9 +15,10 @@ import sklearn
 from sklearn.metrics import precision_recall_curve
 from funcsigs import signature
 from keras.optimizers import SGD
-#from keras.applications.resnet_v2 import ResNet50V2
 from keras.preprocessing import image
 from sklearn.model_selection import train_test_split
+from sklearn.metrics import plot_precision_recall_curve, average_precision_score
+
 
 test_images_indices = []
 # env variables
@@ -145,9 +146,8 @@ def tuning():
     pass
 
 
-def recall_precision_curve(test_labels, pred):
+def recall_precision_curve(model,test_samples, test_labels, pred):
     '''creates precision curve'''
-    # generate the recall-precision plot and show it
     precision = dict()
     recall = dict()
     for i in range(2):
@@ -174,6 +174,11 @@ def create_data_augmentation(load):
         image2.save(data_path + str(i + 1 + 1000) + ".jpeg")
 
 
+    # average_precision = average_precision_score(test_labels, pred)
+    # print('Average precision-recall score: {0:0.2f}'.format(average_precision))
+    # disp = plot_precision_recall_curve(model, test_samples, test_labels)
+    # disp.ax_.set_title('2-class Precision-Recall curve: '
+    #                    'AP={0:0.2f}'.format(average_precision))
 
 def report_results(predictions, error_type_array):
     '''prints the wrong images'''
@@ -190,7 +195,7 @@ def main():
     train_model(res_net_new, train, BATCH_SIZE, EPOCHS, VERBOSE) # train and validation stage
     predictions = test_model(res_net_new, test, BATCH_SIZE, VERBOSE)  # test stage
     error_type_array = error_type(predictions, test['labels'])  # find the error types
-    recall_precision_curve(np.array(test['labels']), np.array(predictions))  # recall-precision curve
+    recall_precision_curve(res_net_new, np.array(test['data']), np.array(test['labels']), np.array(predictions))  # recall-precision curve
     # report_results(predictions, error_type_array)
 
 
