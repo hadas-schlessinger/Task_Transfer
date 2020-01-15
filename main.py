@@ -12,9 +12,9 @@ from keras.models import Model
 from keras.preprocessing import image
 from keras.applications.imagenet_utils import preprocess_input
 from sklearn.metrics import precision_recall_curve
-from sklearn.utils.fixes import signature
+#from sklearn.utils.fixes import signature
 from keras.optimizers import SGD
-from keras.applications.vgg19 import VGG19
+from keras.applications.resnet_v2 import ResNet50V2
 from keras.preprocessing import image
 from keras.applications.vgg19 import preprocess_input
 
@@ -45,8 +45,18 @@ def set_and_split_data():
 
 def reconstruct_net(s, num_classes, net_name):
     '''export the net without the last layer'''
-    basic_model = ' '
-    return basic_model
+    image_input = Input(shape=(s, s, 3))
+    basic_model = keras.applications.resnet_v2.ResNet50V2(include_top=True, weights='imagenet', input_tensor=image_input)
+    last_layer = basic_model.layers[-2].output
+    out = Dense(num_classes-1, activation='sigmoid', name='output')(last_layer)  # changes the number of last layer neuron to 2
+    model_without_last_layer = Model(image_input, out)
+    model_without_last_layer.summary()
+    for layer in model_without_last_layer.layers[:-1]:  # All layers are not trainable besides last one
+        layer.trainable = False
+    sgd = SGD(lr=0.01, decay=0.001)  # SGD optimizer
+    model_without_last_layer.compile(loss='binary_crossentropy', optimizer='adadelta', metrics=['accuracy'])
+    model_without_last_layer.summary()
+    return model_without_last_layer
 
 
 def train_model(res_net_basic, train, batch_size, epochs, verbose):
@@ -87,12 +97,12 @@ def main():
     train, test = set_and_split_data()
     # tuning_error_per_set, errors = tuning(train)
     res_net_basic = reconstruct_net(S, NUMBER_OF_CLASSES, NET_NAME)  # preparing the network
-    model = train_model(res_net_basic, train, BATCH_SIZE, EPOCHS, VERBOSE) # train and validation stage
-    test_model(model, test, BATCH_SIZE, VERBOSE)  # test stage
-    predictions = model.predict(test)
-    error_type_array = error_type(predictions, test['labels'])  # find the error types
-    recall_precision_curve(test['labels'], predictions)  # recall-precision curve
-    report_results(predictions, error_type_array)
+    # model = train_model(res_net_basic, train, BATCH_SIZE, EPOCHS, VERBOSE) # train and validation stage
+    # test_model(model, test, BATCH_SIZE, VERBOSE)  # test stage
+    # predictions = model.predict(test)
+    # error_type_array = error_type(predictions, test['labels'])  # find the error types
+    # recall_precision_curve(test['labels'], predictions)  # recall-precision curve
+    # report_results(predictions, error_type_array)
 
 
 if __name__ == "__main__":
