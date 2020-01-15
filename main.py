@@ -6,6 +6,7 @@ import cv2
 import keras
 import matplotlib.pyplot as plt
 import matplotlib.image as mpimg
+from PIL import Image
 from keras.layers import merge, Input
 from keras.layers import Dense
 from keras.models import Model
@@ -17,7 +18,7 @@ from funcsigs import signature
 from keras.optimizers import SGD
 from keras.preprocessing import image
 from sklearn.model_selection import train_test_split
-from sklearn.metrics import plot_precision_recall_curve, average_precision_score
+#from sklearn.metrics import plot_precision_recall_curve, average_precision_score
 
 
 test_images_indices = []
@@ -27,9 +28,10 @@ NUMBER_OF_CLASSES = 2
 BATCH_SIZE = 16
 EPOCHS = 1
 VERBOSE = 1
+TRAIN_SIZE = 300  # number of pictures from the data to train
 data_path = os.path.join(os.getcwd(), 'FlowerData')  # The images path
-Mat_file = '/Users/hadasch/PycharmProjects/Task_Transfer/FlowerData/FlowerDataLabels.mat'
-
+Mat_file = '/Users/noy/PycharmProjects/Task_Transfer/FlowerData/FlowerDataLabels.mat'
+NEEDS_AUG = True
 
 def set_and_split_data():
     '''set the images and split them'''
@@ -39,18 +41,36 @@ def set_and_split_data():
             'labels': []}
     # dictionary with variable names as keys, and loaded matrices as values.
     dictionary_labels = sio.loadmat(Mat_file, mdict=None, appendmat=True)
-    helper = keras.utils.to_categorical(np.transpose(dictionary_labels['Labels']).tolist(), NUMBER_OF_CLASSES) # list of labels
-    images_train = 300  # number of pictures from the data to train
-    for i in range(len(helper)):  # for filename in datapath folder which is flowerData
+    labels_from_mat = np.transpose(dictionary_labels['Labels']).tolist()
+    labels_with_aug = []
+
+    if NEEDS_AUG:
+        for i in range(len(labels_from_mat) + TRAIN_SIZE):
+            if i < len(labels_from_mat):
+                labels_with_aug.append(labels_from_mat[i])# original images
+            else:# augmantation images
+                if i < len(labels_from_mat) + TRAIN_SIZE:# augmantation images
+                    labels_with_aug.append(labels_from_mat[i - len(labels_from_mat)])
+                else:
+                    labels_with_aug.append(labels_from_mat[i - len(labels_from_mat) - TRAIN_SIZE])
+
+        helper = keras.utils.to_categorical(labels_with_aug, NUMBER_OF_CLASSES)  # list of labels
+    else:
+        helper = keras.utils.to_categorical(labels_from_mat, NUMBER_OF_CLASSES)  # list of labels
+
+    for i in range(len(helper)):  # for filename in data path folder which is flowerData
         image_dir_file = data_path + "/" + str(i + 1) + ".jpeg"
         # image read and converting it image pixels to a numpy array
         a = preprocess_input(np.expand_dims(image.img_to_array(image.load_img(image_dir_file, target_size=(S, S))), axis=0))
-        if i < images_train:  # divide the 300 first images into train
+
+        # inserts the 300 first and it augmentation images into train
+        if i < TRAIN_SIZE or ((i > TRAIN_SIZE) and (i< len(labels_from_mat) + TRAIN_SIZE)):
             train['data'].append(a)  # connect a to the big 4D array of input images
             train['labels'].append(helper[i])  # divide the dictionary into labels vector of train
-        else:
+        else:# inserts the last images into test
             test['data'].append(a)  # accumulate image array
             test['labels'].append(helper[i])  # divide the dictionary into labels vector of test
+
     # changing the train_images_list into numpy array for fitting VGG16
     train['data'] = np.array(train['data'])
     train['data'] = np.rollaxis(train['data'], 1, 0)
@@ -159,26 +179,19 @@ def recall_precision_curve(model,test_samples, test_labels, pred):
     plt.fill_between(recall["micro"], precision["micro"], alpha=0.2, color='b', **step_kwargs)
     plt.xlabel('Recall'), plt.ylabel('Precision'), plt.title('Precision Recall Curve')
     plt.show()
-
-def create_data_augmentation(load):
-    '''
-    creat////
-    '''
-    train_size = load['train_size']
-    file_path = load['path']
-
-    ##-- create pics of train tranpose on the y axis
-    for i in range(train_size):
-        image_dir = file_path + str(i + 1) + ".jpeg"
-        image2 = Image.open(image_dir).transpose(Image.FLIP_LEFT_RIGHT)
-        image2.save(data_path + str(i + 1 + 1000) + ".jpeg")
-
-
     # average_precision = average_precision_score(test_labels, pred)
     # print('Average precision-recall score: {0:0.2f}'.format(average_precision))
     # disp = plot_precision_recall_curve(model, test_samples, test_labels)
     # disp.ax_.set_title('2-class Precision-Recall curve: '
     #                    'AP={0:0.2f}'.format(average_precision))
+
+def create_data_augmentation():
+    ''' create images of train tranpose on the y axis'''
+    for i in range(1,TRAIN_SIZE+1):
+        image_dir_file = data_path + "/" + str(i) + ".jpeg"
+        image2 = Image.open(image_dir_file).transpose(Image.FLIP_LEFT_RIGHT)
+        image2.save(data_path + '/' + str(i + 472) + ".jpeg")
+
 
 def report_results(predictions, error_type_array):
     '''prints the wrong images'''
@@ -188,15 +201,15 @@ def report_results(predictions, error_type_array):
 ################# main ####################
 def main():
     np.random.seed(0)  # seed
-    data_augmentation = create_data_augmentation(params['load'])
-    train, test = set_and_split_data()
-    # tuning_error_per_set, errors = tuning(train)
-    res_net_new = reconstruct_net(S, NUMBER_OF_CLASSES)  # preparing the network
-    train_model(res_net_new, train, BATCH_SIZE, EPOCHS, VERBOSE) # train and validation stage
-    predictions = test_model(res_net_new, test, BATCH_SIZE, VERBOSE)  # test stage
-    error_type_array = error_type(predictions, test['labels'])  # find the error types
-    recall_precision_curve(res_net_new, np.array(test['data']), np.array(test['labels']), np.array(predictions))  # recall-precision curve
-    # report_results(predictions, error_type_array)
+    create_data_augmentation()
+    # train, test = set_and_split_data()
+    # # tuning_error_per_set, errors = tuning(train)
+    # res_net_new = reconstruct_net(S, NUMBER_OF_CLASSES)  # preparing the network
+    # train_model(res_net_new, train, BATCH_SIZE, EPOCHS, VERBOSE) # train and validation stage
+    # predictions = test_model(res_net_new, test, BATCH_SIZE, VERBOSE)  # test stage
+    # error_type_array = error_type(predictions, test['labels'])  # find the error types
+    # recall_precision_curve(res_net_new, np.array(test['data']), np.array(test['labels']), np.array(predictions))  # recall-precision curve
+    # # report_results(predictions, error_type_array)
 
 
 if __name__ == "__main__":
