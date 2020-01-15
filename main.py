@@ -65,24 +65,25 @@ def set_and_split_data():
     return train, test
 
 
-def reconstruct_net(s, num_classes):
+def reconstruct_net(s, num_classes, activation, optimizer):
     '''export the net without the last layer'''
     image_input = Input(shape=(s, s, 3))
     basic_model = keras.applications.resnet_v2.ResNet50V2(include_top=True, weights='imagenet', input_tensor=image_input)
-    last_layer = basic_model.layers[-2].output
-    model_without_last_layer = Model(image_input, Dense(num_classes, activation='sigmoid', name='output')(last_layer))
+    last_layer_minus_1 = basic_model.layers[-2].output
+    model_without_last_layer = Model(image_input, Dense(num_classes, activation=activation, name='output')(last_layer_minus_1))
     model_without_last_layer.summary()
     for layer in model_without_last_layer.layers[:-1]:  # All layers are not trainable besides last one
         layer.trainable = False
-    model_without_last_layer.compile(loss='binary_crossentropy', optimizer=SGD(lr=0.01, decay=0.001), metrics=['accuracy'])
+    model_without_last_layer.compile(loss='binary_crossentropy', optimizer=optimizer, metrics=['accuracy'])
     # model_without_last_layer.summary()
     return model_without_last_layer
 
 
-def train_model(res_net_basic, train, batch_size, epochs, verbose):     # hyper parameter  batch_size, epoches
+def train_model(res_net_basic, train, batch_size, epochs, verbose):     # hyper parameter epoches
     train_images, valid_images, train_labels, valid_labels = train_test_split(train['data'], train['labels'], test_size=0.33, shuffle=True)
     return res_net_basic.fit(train_images, train_labels, batch_size=batch_size, epochs=epochs,
                          verbose=verbose, validation_data=(valid_images, valid_labels), shuffle=True)  # fitting the model
+
 
 
 def test_model(model, test, batch_size, verbose):
@@ -92,7 +93,6 @@ def test_model(model, test, batch_size, verbose):
     return model.predict(test['data'])  # returns the predictions
 
 
-
 def error_type(predictions, test_labels):
     """returns a vector of all error types
     "Type 1: miss-detection: the algorithm thought it is not an flower, but it is
@@ -100,51 +100,82 @@ def error_type(predictions, test_labels):
     errors = {'type 1': [], 'type 2': []}
     errors['type 1'] = {'index': [], 'score': []}
     errors['type 2'] = {'index': [], 'score': []}
-
     score_type_1 = []
     score_type_2 = []
-
     for i in range(len(predictions)):
         predict_1 = predictions[i][1]
         if predict_1 <= 0.5 and test_labels[i][1] == 1:  # type 1: thought it's not flower(0) but it's (1)
             score_type_1.append((i+301, predict_1))#wich score?
         if predict_1 > 0.5 and test_labels[i][0] == 1:  # type 2: thought it's flower (1) but it's not (0)
             score_type_2.append((i+301, predict_1))
-
     score_type_1.sort(key = takeSecond)
     score_type_2.sort(key = takeSecond)
-
-    Max_score_type_1 = score_type_1[0:min(len(score_type_1),5)]
-    Max_score_type_2 = score_type_2[0:min(len(score_type_2),5)]
-
-    if len(Max_score_type_1) != 0:
+    max_score_type_1 = score_type_1[0:min(len(score_type_1),5)]
+    max_score_type_2 = score_type_2[0:min(len(score_type_2),5)]
+    if len(max_score_type_1) != 0:
         for i in range(5):
-            print("Error type 1, ", "Index :" + str(takefirst(Max_score_type_1[i])), "Picture number and score: " + str(takeSecond(Max_score_type_1[i])))
+            print("Error type 1, ", "Index :" + str(takefirst(max_score_type_1[i])), "Picture number and score: " + str(takeSecond(max_score_type_1[i])))
     else:
         print("There is no type 2 errors")
 
-    if len(Max_score_type_2) != 0:
+    if len(max_score_type_2) != 0:
         for i in range(5):
-            print("Error type 2, ", "Index :" + str(takefirst(Max_score_type_2[i])), "Picture number and score: " + str(takeSecond(Max_score_type_2[i])))
+            print("Error type 2, ", "Index :" + str(takefirst(max_score_type_2[i])), "Picture number and score: " + str(takeSecond(max_score_type_2[i])))
     else:
         print("There is no type 2 errors")
-
     #all errors
     errors['type 1'] = {'index': takefirst(score_type_1), 'distance': takeSecond(score_type_1)}
     errors['type 2'] = {'index': takefirst(score_type_2), 'distance': takeSecond(score_type_2)}
-
     return errors
+
 
 def takeSecond(elem):
     return elem[1] #sort by second element function
 
+
 def takefirst(elem):
     return elem[0] #sort by second element function
 
-def tuning():
-    '''tune hyper parameters to improve the model'''
-    pass
 
+def tuning(train, batch_size, verbose):
+    '''tune hyper parameters to improve the model'''
+    # ---- train the net
+    acc = []
+    for epochs in range(1,7):
+        print(f'epochs = {epochs}')
+        model = reconstruct_net(S, NUMBER_OF_CLASSES,'sigmoid',SGD(lr=0.01, decay=0.001))
+        hist = train_model(model, train, batch_size, epochs, verbose)
+        val_acc = hist.history['val_accuracy']
+        acc.append(val_acc[len(val_acc) - 1])
+    print(acc)
+    chosen_epochs = acc.index(max(acc))+1
+    acc.clear()
+    activations = ['sigmoid','relu','softmax','elu','softsign','tanh']
+
+    for activation in activations:
+        print(f'activation = {activation}')
+        model = reconstruct_net(S, NUMBER_OF_CLASSES, activation, SGD(lr=0.01, decay=0.001))
+        hist = train_model(model, train, batch_size, chosen_epochs, verbose)
+        val_acc = hist.history['val_accuracy']
+        acc.append(val_acc[len(val_acc) - 1])
+    print(acc)
+    chosen_activation = activations[acc.index(max(acc))]
+    acc.clear()
+
+    for lr in [0.01, 0.02, 0.03, 0.04, 0.05]:
+        for decay in [0.001, 0.005, 0.01, 0.1]:
+            print(f'leraning rate = {lr} and decay = {decay}')
+            model = reconstruct_net(S, NUMBER_OF_CLASSES, chosen_activation, SGD(lr=lr, decay=decay))
+            hist = train_model(model, train, batch_size, chosen_epochs, verbose)
+            val_acc = hist.history['val_accuracy']
+            acc.append(val_acc[len(val_acc) - 1])
+    print(acc)
+    print(f'the chosen epochs is {chosen_epochs}')
+    print(f'the chosen activation is {chosen_activation}')
+    print(f'max accuracy index is {acc.index(max(acc))}')
+    print('lr = 0.03, decay = 0.1')
+
+    # do we need to decide by loss or by accuracy?????
 
 def recall_precision_curve(model,test_samples, test_labels, pred):
     '''creates precision curve'''
@@ -160,29 +191,25 @@ def recall_precision_curve(model,test_samples, test_labels, pred):
     plt.xlabel('Recall'), plt.ylabel('Precision'), plt.title('Precision Recall Curve')
     plt.show()
 
-def create_data_augmentation(load):
-    '''
-    creat////
-    '''
-    train_size = load['train_size']
-    file_path = load['path']
-
-    ##-- create pics of train tranpose on the y axis
-    for i in range(train_size):
-        image_dir = file_path + str(i + 1) + ".jpeg"
-        image2 = Image.open(image_dir).transpose(Image.FLIP_LEFT_RIGHT)
-        image2.save(data_path + str(i + 1 + 1000) + ".jpeg")
-
-
     # average_precision = average_precision_score(test_labels, pred)
     # print('Average precision-recall score: {0:0.2f}'.format(average_precision))
     # disp = plot_precision_recall_curve(model, test_samples, test_labels)
     # disp.ax_.set_title('2-class Precision-Recall curve: '
     #                    'AP={0:0.2f}'.format(average_precision))
 
-def report_results(predictions, error_type_array):
-    '''prints the wrong images'''
-    pass
+
+def create_data_augmentation(load):
+    '''
+    creat////
+    '''
+    # train_size = load['train_size']
+    # file_path = load['path']
+    #
+    # ##-- create pics of train tranpose on the y axis
+    # for i in range(train_size):
+    #     image_dir = file_path + str(i + 1) + ".jpeg"
+    #     image2 = Image.open(image_dir).transpose(Image.FLIP_LEFT_RIGHT)
+    #     image2.save(data_path + str(i + 1 + 1000) + ".jpeg")
 
 
 ################# main ####################
@@ -190,14 +217,12 @@ def main():
     np.random.seed(0)  # seed
     data_augmentation = create_data_augmentation(params['load'])
     train, test = set_and_split_data()
-    # tuning_error_per_set, errors = tuning(train)
-    res_net_new = reconstruct_net(S, NUMBER_OF_CLASSES)  # preparing the network
+    tuning(train, BATCH_SIZE, VERBOSE)
+    res_net_new = reconstruct_net(S, NUMBER_OF_CLASSES,'sigmoid',SGD(lr=0.01, decay=0.001))  # preparing the network
     train_model(res_net_new, train, BATCH_SIZE, EPOCHS, VERBOSE) # train and validation stage
     predictions = test_model(res_net_new, test, BATCH_SIZE, VERBOSE)  # test stage
     error_type_array = error_type(predictions, test['labels'])  # find the error types
     recall_precision_curve(res_net_new, np.array(test['data']), np.array(test['labels']), np.array(predictions))  # recall-precision curve
-    # report_results(predictions, error_type_array)
-
 
 if __name__ == "__main__":
     main()
