@@ -24,7 +24,7 @@ from sklearn.model_selection import train_test_split
 test_images_indices = []
 # env variables
 S = 224
-NUMBER_OF_CLASSES = 2
+NUMBER_OF_CLASSES = 1
 BATCH_SIZE = 16
 EPOCHS = 1
 VERBOSE = 1
@@ -42,36 +42,34 @@ def set_and_split_data():
     # dictionary with variable names as keys, and loaded matrices as values.
     dictionary_labels = sio.loadmat(Mat_file, mdict=None, appendmat=True)
     labels_from_mat = np.transpose(dictionary_labels['Labels']).tolist()
+    # print(f'labels from mat is:{labels_from_mat}')
     labels_with_aug = []
 
     if NEEDS_AUG:
         for i in range(len(labels_from_mat) + TRAIN_SIZE):
             if i < len(labels_from_mat):
                 labels_with_aug.append(labels_from_mat[i])# original images
-            else:# augmantation images
+            else: # augmantations images
                 if i < len(labels_from_mat) + TRAIN_SIZE:# augmantation images
                     labels_with_aug.append(labels_from_mat[i - len(labels_from_mat)])
                 else:
                     labels_with_aug.append(labels_from_mat[i - len(labels_from_mat) - TRAIN_SIZE])
+    # print(f'labels_with_aug is:{labels_with_aug}')
 
-        helper = keras.utils.to_categorical(labels_with_aug, NUMBER_OF_CLASSES)  # list of labels
-    else:
-        helper = keras.utils.to_categorical(labels_from_mat, NUMBER_OF_CLASSES)  # list of labels
-
-    for i in range(len(helper)):  # for filename in data path folder which is flowerData
+    for i in range(len(labels_with_aug)):  # for filename in data path folder which is flowerData
         image_dir_file = data_path + "/" + str(i + 1) + ".jpeg"
         # image read and converting it image pixels to a numpy array
         a = preprocess_input(np.expand_dims(image.img_to_array(image.load_img(image_dir_file, target_size=(S, S))), axis=0))
 
         # inserts the 300 first and it augmentation images into train
-        if i < TRAIN_SIZE or ((i > TRAIN_SIZE) and (i< len(labels_from_mat) + TRAIN_SIZE)):
+        if i < TRAIN_SIZE or (i > len(labels_from_mat)):# i<300 or i>472
             train['data'].append(a)  # connect a to the big 4D array of input images
-            train['labels'].append(helper[i])  # divide the dictionary into labels vector of train
-        else:# inserts the last images into test
+            train['labels'].append(labels_with_aug[i])  # divide the dictionary into labels vector of train
+        else:# inserts the tesr images into test
+            # 300<i<=472
             test['data'].append(a)  # accumulate image array
-            test['labels'].append(helper[i])  # divide the dictionary into labels vector of test
+            test['labels'].append(labels_with_aug[i])  # divide the dictionary into labels vector of test
 
-    # changing the train_images_list into numpy array for fitting VGG16
     train['data'] = np.array(train['data'])
     train['data'] = np.rollaxis(train['data'], 1, 0)
     train['data'] = train['data'][0]
@@ -82,6 +80,7 @@ def set_and_split_data():
     # changing the labels into numpy array for fitting
     train['labels'] = np.array(train['labels'])
     test['labels'] = np.array(test['labels'])
+
     return train, test
 
 
@@ -123,37 +122,42 @@ def error_type(predictions, test_labels):
     score_type_1 = []
     score_type_2 = []
     for i in range(len(predictions)):
-        predict_1 = predictions[i][1]
-        if predict_1 <= 0.5 and test_labels[i][1] == 1:  # type 1: thought it's not flower(0) but it's (1)
+        predict_1 = predictions[i]
+        if predict_1 <= 0.5 and test_labels[i] == 1:  # type 1: thought it's not flower(0) but it's (1)
             score_type_1.append((i+301, predict_1))#wich score?
-        if predict_1 > 0.5 and test_labels[i][0] == 1:  # type 2: thought it's flower (1) but it's not (0)
+        if predict_1 > 0.5 and test_labels[i] == 0:  # type 2: thought it's flower (1) but it's not (0)
             score_type_2.append((i+301, predict_1))
-    score_type_1.sort(key = takeSecond)
-    score_type_2.sort(key = takeSecond)
+
+    print(f'unsort type 1 is:{score_type_1}')
+    print(f'unsort type 2 is:{score_type_2}')
+    score_type_1.sort(key=take_second)
+    score_type_2.sort(key=take_second)
+    print(f'sort type 1 is:{score_type_1}')
+    print(f'sort type 2 is:{score_type_2}')
     max_score_type_1 = score_type_1[0:min(len(score_type_1),5)]
     max_score_type_2 = score_type_2[0:min(len(score_type_2),5)]
     if len(max_score_type_1) != 0:
         for i in range(5):
-            print("Error type 1, ", "Index :" + str(takefirst(max_score_type_1[i])), "Picture number and score: " + str(takeSecond(max_score_type_1[i])))
+            print("Error type 1, ", "Index :" + str(take_first(max_score_type_1[i])), "Picture number and score: " + str(take_second(max_score_type_1[i])))
     else:
         print("There is no type 2 errors")
 
     if len(max_score_type_2) != 0:
         for i in range(5):
-            print("Error type 2, ", "Index :" + str(takefirst(max_score_type_2[i])), "Picture number and score: " + str(takeSecond(max_score_type_2[i])))
+            print("Error type 2, ", "Index :" + str(take_first(max_score_type_2[i])), "Picture number and score: " + str(take_second(max_score_type_2[i])))
     else:
         print("There is no type 2 errors")
     #all errors
-    errors['type 1'] = {'index': takefirst(score_type_1), 'distance': takeSecond(score_type_1)}
-    errors['type 2'] = {'index': takefirst(score_type_2), 'distance': takeSecond(score_type_2)}
+    errors['type 1'] = {'index': take_first(score_type_1), 'distance': take_second(score_type_1)}
+    errors['type 2'] = {'index': take_first(score_type_2), 'distance': take_second(score_type_2)}
     return errors
 
 
-def takeSecond(elem):
+def take_second(elem):
     return elem[1] #sort by second element function
 
 
-def takefirst(elem):
+def take_first(elem):
     return elem[0] #sort by second element function
 
 
@@ -233,14 +237,14 @@ def report_results(predictions, error_type_array):
 ################# main ####################
 def main():
     np.random.seed(0)  # seed
-    create_data_augmentation()
+    # create_data_augmentation()
     train, test = set_and_split_data()
-    tuning(train, BATCH_SIZE, VERBOSE)
+    # tuning(train, BATCH_SIZE, VERBOSE)
     res_net_new = reconstruct_net(S, NUMBER_OF_CLASSES,'sigmoid',SGD(lr=0.01, decay=0.001))  # preparing the network
     train_model(res_net_new, train, BATCH_SIZE, EPOCHS, VERBOSE) # train and validation stage
     predictions = test_model(res_net_new, test, BATCH_SIZE, VERBOSE)  # test stage
     error_type_array = error_type(predictions, test['labels'])  # find the error types
-    recall_precision_curve(res_net_new, np.array(test['data']), np.array(test['labels']), np.array(predictions))  # recall-precision curve
+    # recall_precision_curve(res_net_new, np.array(test['data']), np.array(test['labels']), np.array(predictions))  # recall-precision curve
 
 if __name__ == "__main__":
     main()
