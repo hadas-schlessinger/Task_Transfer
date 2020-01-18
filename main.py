@@ -7,28 +7,34 @@ import keras
 import matplotlib.pyplot as plt
 import matplotlib.image as mpimg
 from PIL import Image
+import keras.applications
+
 from keras.layers import merge, Input
 from keras.layers import Dense
 from keras.models import Model
 from keras.preprocessing import image
-from keras.applications.imagenet_utils import preprocess_input
+# from keras.applications.imagenet_utils import preprocess_input
+from keras.applications.resnet_v2 import preprocess_input
+
 import sklearn
 from sklearn.metrics import precision_recall_curve
 from funcsigs import signature
 from keras.optimizers import SGD
 from keras.preprocessing import image
 from sklearn.model_selection import train_test_split
-from sklearn.metrics import plot_precision_recall_curve, average_precision_score
+# from sklearn.metrics import plot_precision_recall_curve, average_precision_score
 
+from keras import applications
+# resnet = applications.ResNeXt101(include_top=False, weights='imagenet', input_shape=(SCALED_HEIGHT, SCALED_WIDTH, 3), pooling=None)
 
-test_images_indices = []
+test_images_indices = list(range(301,472))
+
 # env variables
 S = 224
 NUMBER_OF_CLASSES = 1
 BATCH_SIZE = 16
 EPOCHS = 1
 VERBOSE = 1
-TRAIN_SIZE = 300  # number of pictures from the data to train
 data_path = os.path.join(os.getcwd(), 'FlowerData')  # The images path
 Mat_file = '/Users/noy/PycharmProjects/Task_Transfer/FlowerData/FlowerDataLabels.mat'
 NEEDS_AUG = True
@@ -43,40 +49,42 @@ def set_and_split_data():
     # dictionary with variable names as keys, and loaded matrices as values.
     dictionary_labels = sio.loadmat(Mat_file, mdict=None, appendmat=True)
     labels_from_mat = np.transpose(dictionary_labels['Labels']).tolist()
-    labels_with_aug = []
 
-    if NEEDS_AUG:
-        for i in range(len(labels_from_mat) + TRAIN_SIZE):
-            if i < len(labels_from_mat):
-                labels_with_aug.append(labels_from_mat[i])# original images
-            else: # augmantations images
-                if i < len(labels_from_mat) + TRAIN_SIZE:# augmantation images
-                    labels_with_aug.append(labels_from_mat[i - len(labels_from_mat)])
-                else:
-                    labels_with_aug.append(labels_from_mat[i - len(labels_from_mat) - TRAIN_SIZE])
-    # print(f'labels_with_aug is:{labels_with_aug}')
-
-    for i in range(len(labels_with_aug)):  # for filename in data path folder which is flowerData
+    for i in range(len(labels_from_mat)):  # for filename in data path folder which is flowerData
         image_dir_file = data_path + "/" + str(i + 1) + ".jpeg"
         # image read and converting it image pixels to a numpy array
         a = preprocess_input(np.expand_dims(image.img_to_array(image.load_img(image_dir_file, target_size=(S, S))), axis=0))
+        # pixels = image.img_to_array(image.load_img(image_dir_file, target_size=(S, S)))
+        # pixels = pixels.astype('float32')
+        # # calculate per-channel means and standard deviations
+        # means = pixels.mean(axis=(0,1), dtype='float64')
+        # # per-channel centering of pixels
+        # pixels -= means
+        # a = preprocess_input(np.expand_dims(pixels, axis=0))
 
-        # inserts the 300 first and it augmentation images into train
-        if i < TRAIN_SIZE or (i > len(labels_from_mat)):# i<300 or i>472
-            train['data'].append(a)  # connect a to the big 4D array of input images
-            train['labels'].append(labels_with_aug[i])  # divide the dictionary into labels vector of train
-        else:# inserts the tesr images into test
-            # 300<i<=472
+        if i in test_images_indices:  # inserts the test set
             test['data'].append(a)  # accumulate image array
-            test['labels'].append(labels_with_aug[i])  # divide the dictionary into labels vector of test
+            test['labels'].append(labels_from_mat[i])  # divide the dictionary into labels vector of test
+        else:  # inserts the train set and it's augmentation image into train set
+            train['data'].append(a)  # connect a to the big 4D array of input images
+            train['labels'].append(labels_from_mat[i])  # divide the dictionary into labels vector of train
+            a_aug = Image.open(image_dir_file).transpose(Image.FLIP_LEFT_RIGHT)# create image augmentation
+            aug_dir_file = data_path + "/" + str(i +1000) + ".jpeg"
+            a_aug.save(aug_dir_file)
+            a_aug = preprocess_input(np.expand_dims(image.img_to_array(image.load_img(image_dir_file, target_size=(S, S))), axis=0))
+            # pixels = image.img_to_array(image.load_img(aug_dir_file, target_size=(S, S)))
+            # pixels = pixels.astype('float32')
+            # means = pixels.mean(axis=(0, 1), dtype='float64')
+            # pixels -= means
+            # a_aug = preprocess_input(np.expand_dims(pixels, axis=0))
+            train['data'].append(a_aug)  # connect a to the big 4D array of input images
+            train['labels'].append(labels_from_mat[i])  # divide the dictionary into labels vector of train
 
-    train['data'] = np.array(train['data'])
-    train['data'] = np.rollaxis(train['data'], 1, 0)
-    train['data'] = train['data'][0]
-    # changing the test_images_list into numpy array for fitting
-    test['data'] = np.array(test['data'])
-    test['data'] = np.rollaxis(test['data'], 1, 0)
-    test['data'] = test['data'][0]
+
+    # changing the train anf test into numpy array for fitting
+    train['data'] = np.rollaxis(np.array(train['data']), 1, 0)[0]
+    test['data'] = np.rollaxis(np.array(test['data']), 1, 0)[0]
+
     # changing the labels into numpy array for fitting
     train['labels'] = np.array(train['labels'])
     test['labels'] = np.array(test['labels'])
@@ -123,27 +131,29 @@ def error_type(predictions, test_labels):
     score_type_2 = []
     for i in range(len(predictions)):
         predict_1 = predictions[i]
+        index_i = test_images_indices[i]
+        print(f' pridict is: {predict_1} and the index is {index_i}')
         if predict_1 <= 0.5 and test_labels[i] == 1:  # type 1: thought it's not flower(0) but it's (1)
-            score_type_1.append((i+301, predict_1))#wich score?
+            score_type_1.append((index_i, predict_1))
         if predict_1 > 0.5 and test_labels[i] == 0:  # type 2: thought it's flower (1) but it's not (0)
-            score_type_2.append((i+301, predict_1))
+            score_type_2.append((index_i,predict_1))
 
     print(f'unsort type 1 is:{score_type_1}')
     print(f'unsort type 2 is:{score_type_2}')
-    score_type_1.sort(key=take_second)
+    score_type_1.sort(key=take_second,reverse=True)
     score_type_2.sort(key=take_second)
     print(f'sort type 1 is:{score_type_1}')
     print(f'sort type 2 is:{score_type_2}')
     max_score_type_1 = score_type_1[0:min(len(score_type_1),5)]
     max_score_type_2 = score_type_2[0:min(len(score_type_2),5)]
     if len(max_score_type_1) != 0:
-        for i in range(5):
+        for i in range(len(max_score_type_1)):
             print("Error type 1, ", "Index :" + str(take_first(max_score_type_1[i])), "Picture number and score: " + str(take_second(max_score_type_1[i])))
     else:
         print("There is no type 2 errors")
 
     if len(max_score_type_2) != 0:
-        for i in range(5):
+        for i in range(len(max_score_type_2)):
             print("Error type 2, ", "Index :" + str(take_first(max_score_type_2[i])), "Picture number and score: " + str(take_second(max_score_type_2[i])))
     else:
         print("There is no type 2 errors")
@@ -236,25 +246,21 @@ def recall_precision_curve(model,test_samples, test_labels, pred):
     disp = plot_precision_recall_curve(model, test_samples, test_labels)
     disp.ax_.set_title('2-class Precision-Recall curve: '
                        'AP={0:0.2f}'.format(average_precision))
-
-
-def create_data_augmentation():
-    ''' create images of train tranpose on the y axis'''
-    for i in range(1,TRAIN_SIZE+1):
-        image_dir_file = data_path + "/" + str(i) + ".jpeg"
-        image2 = Image.open(image_dir_file).transpose(Image.FLIP_LEFT_RIGHT)
-        image2.save(data_path + '/' + str(i + 472) + ".jpeg")
-
+def show_images(images):
+    for i in range(len(images)):
+        plt.imshow(images[i])
+        plt.show()
 
 ################# main ####################
 def main():
     np.random.seed(0)  # seed
-    # create_data_augmentation()
     train, test = set_and_split_data()
-    # tuning(train, BATCH_SIZE, VERBOSE)
+    # show_images(train['data'])
+    # # tuning(train, BATCH_SIZE, VERBOSE)
     res_net_new = reconstruct_net(S, NUMBER_OF_CLASSES,'sigmoid',SGD(lr=0.01, decay=0.001))  # preparing the network
     train_model(res_net_new, train, BATCH_SIZE, EPOCHS, VERBOSE) # train and validation stage
     predictions = test_model(res_net_new, test, BATCH_SIZE, VERBOSE)  # test stage
+    print(f' pred: {predictions}')
     error_type_array = error_type(predictions, test['labels'])  # find the error types
     # recall_precision_curve(res_net_new, np.array(test['data']), np.array(test['labels']), np.array(predictions))  # recall-precision curve
 
