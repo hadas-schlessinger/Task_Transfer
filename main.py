@@ -110,9 +110,10 @@ def test_model(model, test, batch_size, verbose):
     loss, accuracy = model.evaluate(test['data'], test['labels'], batch_size=batch_size, verbose=verbose)
     print(f'The loss is {round(loss,4)}, the accuracy is {round(accuracy*100,4)}% and the error is {round(100 - accuracy*100,4)}%')
     new_predictions = keras.metrics.binary_accuracy(test['labels'], model.predict(test['data']), threshold=THRESHOLD)
-    print(f'the new labels are {new_predictions}')
-    acc = _calc_accuracy(test['labels'], new_predictions)
-    print(f'the new accuracy is {acc}')
+    new_acc = _calc_accuracy(test['labels'], new_predictions)
+    print(f'################################################')
+    print(f'the new prediction labels are {new_predictions}')
+    print(f'the new accuracy according to the new treshold is {round(new_acc*100,4)}')
     return model.predict(test['data'])  # returns the predictions
 
 
@@ -266,15 +267,10 @@ def _tune_threshold(val_labels, val_data, chosen_activation, lr, decay, chosen_l
 
 def tuning(train, validation, batch_size, verbose):
     '''tune hyper parameters to improve the model'''
-    # chosen_activation = _tune_activation(train, validation, batch_size, verbose)
-    # chosen_layer = _tune_layer(train, validation,  batch_size, verbose, chosen_activation)
-    # chosen_epochs = _tune_epochs(train, validation, batch_size, verbose, chosen_activation, chosen_layer)
-    # chosen_lr, chosen_decay = _tune_gsd(train, validation,  batch_size, verbose, chosen_activation, chosen_layer, chosen_epochs)
-    chosen_activation = 'sigmoid'
-    chosen_layer = -3
-    chosen_epochs = 2
-    chosen_lr = LR
-    chosen_decay = DECAY
+    chosen_activation = _tune_activation(train, validation, batch_size, verbose)
+    chosen_layer = _tune_layer(train, validation,  batch_size, verbose, chosen_activation)
+    chosen_epochs = _tune_epochs(train, validation, batch_size, verbose, chosen_activation, chosen_layer)
+    chosen_lr, chosen_decay = _tune_gsd(train, validation,  batch_size, verbose, chosen_activation, chosen_layer, chosen_epochs)
     threshold = _tune_threshold(validation['labels'], validation['data'], chosen_activation, chosen_lr, chosen_decay, chosen_layer, train, chosen_epochs)
     print('######## Final Tuning Results ############')
     print(f'the chosen epochs is {chosen_epochs}')
