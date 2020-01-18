@@ -15,7 +15,7 @@ from keras.models import Model
 from keras.preprocessing import image
 # from keras.applications.imagenet_utils import preprocess_input
 from keras.applications.resnet_v2 import preprocess_input
-
+from keras import metrics
 import sklearn
 from sklearn.metrics import precision_recall_curve
 from funcsigs import signature
@@ -38,10 +38,10 @@ VERBOSE = 1
 data_path = os.path.join(os.getcwd(), 'FlowerData')  # The images path
 Mat_file = os.path.join(os.getcwd(), 'FlowerData/FlowerDataLabels.mat')
 NEEDS_AUG = True
-LR = 0.01
+LR = 0.03
 DECAY = 0.001
-LAYERS_TO_TRAIN = -1
-
+LAYERS_TO_TRAIN = -3
+THRESHOLD = 0.55
 
 def set_and_split_data():
     '''set the images and split them'''
@@ -92,7 +92,19 @@ def set_and_split_data():
     train['labels'] = np.array(train['labels'])
     test['labels'] = np.array(test['labels'])
 
-    return train, test
+    train_images, valid_images, train_labels, valid_labels = train_test_split(train['data'], train['labels'],
+                                                                              test_size=0.33, shuffle=True)
+    train = {
+        'data': train_images,
+        'labels': train_labels
+    }
+    validation = {
+        'data': valid_images,
+        'labels': valid_labels
+    }
+    return train, test, validation
+
+
 
 
 def reconstruct_net(activation, optimizer, what_to_train):
@@ -105,12 +117,12 @@ def reconstruct_net(activation, optimizer, what_to_train):
     for layer in model_without_last_layer.layers[:what_to_train]:  # All layers are not trainable besides last one
         layer.trainable = False
     model_without_last_layer.compile(loss='binary_crossentropy', optimizer=optimizer, metrics=['accuracy'])
+
     # model_without_last_layer.summary()
     return model_without_last_layer
 
 
-def train_model(res_net_basic, train, batch_size, epochs, verbose):     # hyper parameter epoches
-    train_images, valid_images, train_labels, valid_labels = train_test_split(train['data'], train['labels'], test_size=0.33, shuffle=True)
+def train_model(res_net_basic, train_images, train_labels, valid_images, valid_labels, batch_size, epochs, verbose):     # hyper parameter epoches
     return res_net_basic.fit(train_images, train_labels, batch_size=batch_size, epochs=epochs,
                          verbose=verbose, validation_data=(valid_images, valid_labels), shuffle=True)  # fitting the model
 
@@ -119,7 +131,20 @@ def test_model(model, test, batch_size, verbose):
     '''test and prints accuracy'''
     loss, accuracy = model.evaluate(test['data'], test['labels'], batch_size=batch_size, verbose=verbose)
     print(f'The loss is {round(loss,4)}, the accuracy is {round(accuracy*100,4)}% and the error is {round(100 - accuracy*100,4)}%')
+    new_predictions = keras.metrics.binary_accuracy(test['labels'], model.predict(test['data']), threshold=THRESHOLD)
+    print(f'the new labels are {new_predictions}')
+    acc = _calc_accuracy(test['labels'], new_predictions)
+    print(f'the new accuracy is {acc}')
     return model.predict(test['data'])  # returns the predictions
+
+
+def _calc_accuracy(real_labels, new_labels):
+   counter = 0
+   for i in range(len(new_labels)):
+       if real_labels[i] == new_labels[i]:
+           counter = counter+1
+   return counter/len(new_labels)
+
 
 
 def error_type(predictions, test_labels):
@@ -159,10 +184,7 @@ def error_type(predictions, test_labels):
             print("Error type 2, ", "Index :" + str(take_first(max_score_type_2[i])), "Picture number and score: " + str(take_second(max_score_type_2[i])))
     else:
         print("There is no type 2 errors")
-    #all errors
-    errors['type 1'] = {'index': take_first(score_type_1), 'distance': take_second(score_type_1)}
-    errors['type 2'] = {'index': take_first(score_type_2), 'distance': take_second(score_type_2)}
-    return errors
+
 
 
 def take_second(elem):
@@ -182,7 +204,7 @@ def create_plot(x, y, x_name):
     plt.show()
 
 
-def _tune_activation(train, batch_size, verbose):
+def _tune_activation(train, validation, batch_size, verbose):
     acc = []
     activations = ['sigmoid', 'relu', 'softmax', 'elu', 'softsign', 'tanh']
     for activation in activations:
@@ -196,26 +218,27 @@ def _tune_activation(train, batch_size, verbose):
     print(f'the chosen activation is {chosen_activation}')
     return chosen_activation
 
-def _tune_layer(train, batch_size, verbose, chosen_activation):
+
+def _tune_layer(train, validation,batch_size, verbose, chosen_activation):
     acc = []
     for layer in [-1, -2, -3, -4, -5]:
         print(f'layer = {layer}')
         model = reconstruct_net(chosen_activation, SGD(lr=0.01, decay=0.001), layer)
-        hist = train_model(model, train, batch_size, EPOCHS, verbose)
+        hist = train_model(model,train['data'], train['labels'], validation['data'], validation['labels'], batch_size, EPOCHS, verbose)
         acc.append(hist.history['val_accuracy'][-1])
     create_plot(range(1,6), acc, 'Number of layers to train')
     print(f' tune layers acc = {acc}')
     chosen_layer = acc.index(max(acc))+1
-    print(f'the chosen activation is {chosen_activation}')
-    return chosen_layer
+    print(f'the chosen layer is {chosen_layer}')
+    return -1*chosen_layer
 
 
-def _tune_epochs(train, batch_size, verbose, chosen_activation, chosen_layer):
+def _tune_epochs(train, validation,batch_size, verbose, chosen_activation, chosen_layer):
     acc = []
     for epochs in range(1, 7):
         print(f'epochs = {epochs}')
         model = reconstruct_net(chosen_activation, SGD(lr=0.01, decay=0.001), chosen_layer)
-        hist = train_model(model, train, batch_size, epochs, verbose)
+        hist = train_model(model, train['data'], train['labels'], validation['data'], validation['labels'], batch_size, epochs, verbose)
         acc.append(hist.history['val_accuracy'][- 1])
     create_plot(range(1, 7), acc, 'Epochs')
     print(f' tune epochs acc = {acc}')
@@ -223,7 +246,8 @@ def _tune_epochs(train, batch_size, verbose, chosen_activation, chosen_layer):
     print(f'the chosen epochs is {chosen_epochs}')
     return chosen_epochs
 
-def _tune_gsd(train, batch_size, verbose, chosen_activation, chosen_layer, chosen_epochs):
+
+def _tune_gsd(train, validation,batch_size, verbose, chosen_activation, chosen_layer, chosen_epochs):
     acc = []
     learning_rates = [0.01, 0.03, 0.05]
     decays = [0.001, 0.005, 0.01, 0.1]
@@ -231,29 +255,46 @@ def _tune_gsd(train, batch_size, verbose, chosen_activation, chosen_layer, chose
         for decay in decays:
             print(f'leraning rate = {lr} and decay = {decay}')
             model = reconstruct_net(chosen_activation, SGD(lr=lr, decay=decay), chosen_layer)
-            hist = train_model(model, train, batch_size, chosen_epochs, verbose)
-            # val_acc = hist.history['val_accuracy']
+            hist = train_model(model, train['data'], train['labels'], validation['data'], validation['labels'], batch_size, chosen_epochs, verbose)
             acc.append(hist.history['val_accuracy'][- 1])
     print(f' tune lr and decay acc = {acc}')
     print(f'max accuracy index is {acc.index(max(acc))}')
-    lr_index = round(acc.index(max(acc)) / 5)
+    lr_index = round(acc.index(max(acc)) / 3)
     decey_index = acc.index(max(acc)) / lr_index
     create_plot(range(1, 13), acc, 'SGD parameters')
     print(f'lr index = {lr_index}, decay index = {decey_index}')
-    print(f'lr = {learning_rates[lr_index]}, decay = {decays[decey_index]}')
     return learning_rates[lr_index], decays[decey_index]
 
-def tuning(train, batch_size, verbose):
+
+def _tune_threshold(val_labels, val_data, chosen_activation, lr, decay, chosen_layer, train, chosen_epochs):
+    acc = []
+    thresholds = [0.45, 0.5, 0.55, 0.57, 0.6, 0.65]
+    model = reconstruct_net(chosen_activation, SGD(lr=lr, decay=decay), chosen_layer)
+    train_model(model, train['data'], train['labels'], val_data, val_labels, BATCH_SIZE, chosen_epochs, VERBOSE)
+    for thrsh in thresholds:
+        loss, accuracy = model.evaluate(val_data, val_labels, batch_size=BATCH_SIZE, verbose=VERBOSE)
+        print(f'The loss is {round(loss, 4)}, the accuracy is {round(accuracy * 100, 4)}% and the error is {round(100 - accuracy * 100, 4)}%')
+        new_predictions = keras.metrics.binary_accuracy(val_labels, model.predict(val_data), threshold=thrsh)
+        new_acc = _calc_accuracy(val_labels, new_predictions)
+        print(f'the new accuracy is {new_acc}')
+        acc.append(new_acc)
+    print(f' tune threshold acc = {acc}')
+    chosen_thresh = thresholds[acc.index(max(acc))]
+    print(f'threshold is: {chosen_thresh}')
+
+
+def tuning(train, validation, batch_size, verbose):
     '''tune hyper parameters to improve the model'''
-    chosen_activation = _tune_activation(train, batch_size, verbose)
-    chosen_layer = _tune_layer(train, batch_size, verbose, chosen_activation)
-    chosen_epochs = _tune_epochs(train, batch_size, verbose, chosen_activation, chosen_layer)
-    chosen_lr, chosen_decay = _tune_gsd(train, batch_size, verbose, chosen_activation, chosen_layer, chosen_epochs)
+    chosen_activation = _tune_activation(train, validation, batch_size, verbose)
+    chosen_layer = _tune_layer(train, validation,  batch_size, verbose, chosen_activation)
+    chosen_epochs = _tune_epochs(train, validation, batch_size, verbose, chosen_activation, chosen_layer)
+    chosen_lr, chosen_decay = _tune_gsd(train, validation,  batch_size, verbose, chosen_activation, chosen_layer, chosen_epochs)
+    threshold = _tune_threshold(validation['labels'], validation['data'], chosen_activation, chosen_lr, chosen_decay, chosen_layer, train, chosen_epochs)
     print('######## Final Tuning Results ############')
     print(f'the chosen epochs is {chosen_epochs}')
     print(f'the chosen activation is {chosen_activation}')
     print(f'lr = {chosen_lr}, decay = {chosen_decay}')
-
+    print(f'the chosen threshold is {chosen_activation}')
 
 
 def recall_precision_curve(model,test_samples, test_labels, pred):
@@ -270,18 +311,20 @@ def recall_precision_curve(model,test_samples, test_labels, pred):
     plt.xlabel('Recall'), plt.ylabel('Precision'), plt.title('Precision Recall Curve')
     plt.show()
 
+
 def show_images(images):
     for i in range(len(images)):
         plt.imshow(images[i])
         plt.show()
 
+
 ################# main ####################
 def main():
     np.random.seed(0)  # seed
-    train, test = set_and_split_data()
-    tuning(train, BATCH_SIZE, VERBOSE)
+    train, test, validation = set_and_split_data()
+    #tuning(train, BATCH_SIZE, VERBOSE)
     res_net_new = reconstruct_net('sigmoid', SGD(lr = LR, decay = DECAY), LAYERS_TO_TRAIN)  # preparing the network
-    train_model(res_net_new, train, BATCH_SIZE, EPOCHS, VERBOSE) # train and validation stage
+    train_model(res_net_new, train['data'], train['labels'], validation['data'], validation['labels'], BATCH_SIZE, EPOCHS, VERBOSE) # train and validation stage
     predictions = test_model(res_net_new, test, BATCH_SIZE, VERBOSE)  # test stage
     error_type_array = error_type(predictions, test['labels'])  # find the error types
     recall_precision_curve(res_net_new, np.array(test['data']), np.array(test['labels']), np.array(predictions))  # recall-precision curve
