@@ -33,7 +33,7 @@ test_images_indices = list(range(301,472))
 S = 224
 NUMBER_OF_CLASSES = 1
 BATCH_SIZE = 16
-EPOCHS = 1
+EPOCHS = 12
 VERBOSE = 1
 data_path = os.path.join(os.getcwd(), 'FlowerData')  # The images path
 Mat_file = os.path.join(os.getcwd(), 'FlowerData/FlowerDataLabels.mat')
@@ -80,8 +80,8 @@ def set_and_split_data():
             # means = pixels.mean(axis=(0, 1), dtype='float64')
             # pixels -= means
             # a_aug = preprocess_input(np.expand_dims(pixels, axis=0))
-            train['data'].append(a_aug)  # connect a to the big 4D array of input images
-            train['labels'].append(labels_from_mat[i])  # divide the dictionary into labels vector of train
+            # train['data'].append(a_aug)  # connect a to the big 4D array of input images
+            # train['labels'].append(labels_from_mat[i])  # divide the dictionary into labels vector of train
 
 
     # changing the train anf test into numpy array for fitting
@@ -115,6 +115,7 @@ def train_model(res_net_basic, train, batch_size, epochs, verbose):     # hyper 
                          verbose=verbose, validation_data=(valid_images, valid_labels), shuffle=True)  # fitting the model
 
 
+
 def test_model(model, test, batch_size, verbose):
     '''test and prints accuracy'''
     loss, accuracy = model.evaluate(test['data'], test['labels'], batch_size=batch_size, verbose=verbose)
@@ -134,35 +135,40 @@ def error_type(predictions, test_labels):
     for i in range(len(predictions)):
         predict_1 = predictions[i]
         index_i = test_images_indices[i]
-        print(f' pridict is: {predict_1} and the index is {index_i}')
         if predict_1 <= 0.5 and test_labels[i] == 1:  # type 1: thought it's not flower(0) but it's (1)
             score_type_1.append((index_i, predict_1))
+            print(f' predict  of type 1 is: {predict_1} and the index is {index_i}')
         if predict_1 > 0.5 and test_labels[i] == 0:  # type 2: thought it's flower (1) but it's not (0)
             score_type_2.append((index_i,predict_1))
+            print(f' predict  of type 2 is: {predict_1} and the index is {index_i}')
 
-    print(f'unsort type 1 is:{score_type_1}')
-    print(f'unsort type 2 is:{score_type_2}')
-    score_type_1.sort(key=take_second,reverse=True)
-    score_type_2.sort(key=take_second)
-    print(f'sort type 1 is:{score_type_1}')
-    print(f'sort type 2 is:{score_type_2}')
-    max_score_type_1 = score_type_1[0:min(len(score_type_1),5)]
+    score_type_1.sort(key=take_second,reverse=False)#sort by min
+    score_type_2.sort(key=take_second,reverse=True)#sort by max
+    min_score_type_1 = score_type_1[0:min(len(score_type_1),5)]
     max_score_type_2 = score_type_2[0:min(len(score_type_2),5)]
-    if len(max_score_type_1) != 0:
-        for i in range(len(max_score_type_1)):
-            print("Error type 1, ", "Index :" + str(take_first(max_score_type_1[i])), "Picture number and score: " + str(take_second(max_score_type_1[i])))
+    if len(min_score_type_1) != 0:
+        for i in range(len(min_score_type_1)):
+            print("Error type 1, ", "Index :" + str(take_first(min_score_type_1[i])), "Picture number and score: " + str(take_second(min_score_type_1[i])))
+            image_dir_file= data_path + "/" + str(take_first(min_score_type_1[i])) + ".jpeg"
+            im = cv2.imread(image_dir_file)  # image read
+            plt.imshow(im)
+            plt.show()
     else:
         print("There is no type 2 errors")
 
     if len(max_score_type_2) != 0:
         for i in range(len(max_score_type_2)):
             print("Error type 2, ", "Index :" + str(take_first(max_score_type_2[i])), "Picture number and score: " + str(take_second(max_score_type_2[i])))
+            image_dir_file = data_path + "/" + str(take_first(max_score_type_2[i])) + ".jpeg"
+            im = cv2.imread(image_dir_file)  # image read
+            plt.imshow(im)
+            plt.show()
     else:
         print("There is no type 2 errors")
     #all errors
-    errors['type 1'] = {'index': take_first(score_type_1), 'distance': take_second(score_type_1)}
-    errors['type 2'] = {'index': take_first(score_type_2), 'distance': take_second(score_type_2)}
-    return errors
+    # errors['type 1'] = {'index': take_first(score_type_1), 'distance': take_second(score_type_1)}
+    # errors['type 2'] = {'index': take_first(score_type_2), 'distance': take_second(score_type_2)}
+    # return errors
 
 
 def take_second(elem):
@@ -259,16 +265,35 @@ def show_images(images):
         plt.imshow(images[i])
         plt.show()
 
+def accuracy_plot(history):
+    # summarize history for accuracy
+    plt.plot(history.history['accuracy'])
+    plt.plot(history.history['val_accuracy'])
+    plt.title('model accuracy')
+    plt.ylabel('accuracy')
+    plt.xlabel('epoch')
+    plt.legend(['train', 'val'], loc='upper left')
+    plt.show()
+    # # summarize history for loss
+    # plt.plot(history.history['loss'])
+    # plt.plot(history.history['val_loss'])
+    # plt.title('model loss')
+    # plt.ylabel('loss')
+    # plt.xlabel('epoch')
+    # plt.legend(['train', 'test'], loc='upper left')
+    # plt.show()
+
 ################# main ####################
 def main():
     np.random.seed(0)  # seed
     train, test = set_and_split_data()
-    tuning(train, BATCH_SIZE, VERBOSE)
+    # tuning(train, BATCH_SIZE, VERBOSE)
     res_net_new = reconstruct_net('sigmoid', SGD(lr = LR, decay = DECAY), LAYERS_TO_TRAIN)  # preparing the network
-    train_model(res_net_new, train, BATCH_SIZE, EPOCHS, VERBOSE) # train and validation stage
+    history = train_model(res_net_new, train, BATCH_SIZE, EPOCHS, VERBOSE) # train and validation stage
+    accuracy_plot(history)
     predictions = test_model(res_net_new, test, BATCH_SIZE, VERBOSE)  # test stage
-    error_type_array = error_type(predictions, test['labels'])  # find the error types
-    recall_precision_curve(res_net_new, np.array(test['data']), np.array(test['labels']), np.array(predictions))  # recall-precision curve
+    # error_type(predictions, test['labels'])  # find the error types
+    # recall_precision_curve(res_net_new, np.array(test['data']), np.array(test['labels']), np.array(predictions))  # recall-precision curve
 
 
 if __name__ == "__main__":
