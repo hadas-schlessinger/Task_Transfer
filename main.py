@@ -182,41 +182,49 @@ def create_plot(x, y, x_name):
     plt.show()
 
 
-def tuning(train, batch_size, verbose):
-    '''tune hyper parameters to improve the model'''
-    # ---- train the net
+def _tune_activation(train, batch_size, verbose):
     acc = []
-    for epochs in range(1, 7):
-        print(f'epochs = {epochs}')
-        model = reconstruct_net('sigmoid',SGD(lr=0.01, decay=0.001), LAYERS_TO_TRAIN)
-        hist = train_model(model, train, batch_size, epochs, verbose)
-        acc.append(hist.history['val_accuracy'][- 1])
-    create_plot(range(1, 7), acc, 'Epochs')
-    print(f' tune epochs acc = {acc}')
-    chosen_epochs = acc.index(max(acc))+1
-    acc.clear()
-
     activations = ['sigmoid', 'relu', 'softmax', 'elu', 'softsign', 'tanh']
     for activation in activations:
         print(f'activation = {activation}')
         model = reconstruct_net(activation, SGD(lr=0.01, decay=0.001), LAYERS_TO_TRAIN)
-        hist = train_model(model, train, batch_size, chosen_epochs, verbose)
+        hist = train_model(model, train, batch_size, EPOCHS, verbose)
         acc.append(hist.history['val_accuracy'][-1])
     create_plot(activations, acc, 'Activation')
     print(f' tune activation acc = {acc}')
     chosen_activation = activations[acc.index(max(acc))]
-    acc.clear()
+    print(f'the chosen activation is {chosen_activation}')
+    return chosen_activation
 
+def _tune_layer(train, batch_size, verbose, chosen_activation):
+    acc = []
     for layer in [-1, -2, -3, -4, -5]:
         print(f'layer = {layer}')
         model = reconstruct_net(chosen_activation, SGD(lr=0.01, decay=0.001), layer)
-        hist = train_model(model, train, batch_size, chosen_epochs, verbose)
+        hist = train_model(model, train, batch_size, EPOCHS, verbose)
         acc.append(hist.history['val_accuracy'][-1])
     create_plot(range(1,6), acc, 'Number of layers to train')
     print(f' tune layers acc = {acc}')
     chosen_layer = acc.index(max(acc))+1
-    acc.clear()
+    print(f'the chosen activation is {chosen_activation}')
+    return chosen_layer
 
+
+def _tune_epochs(train, batch_size, verbose, chosen_activation, chosen_layer):
+    acc = []
+    for epochs in range(1, 7):
+        print(f'epochs = {epochs}')
+        model = reconstruct_net(chosen_activation, SGD(lr=0.01, decay=0.001), chosen_layer)
+        hist = train_model(model, train, batch_size, epochs, verbose)
+        acc.append(hist.history['val_accuracy'][- 1])
+    create_plot(range(1, 7), acc, 'Epochs')
+    print(f' tune epochs acc = {acc}')
+    chosen_epochs = acc.index(max(acc)) + 1
+    print(f'the chosen epochs is {chosen_epochs}')
+    return chosen_epochs
+
+def _tune_gsd(train, batch_size, verbose, chosen_activation, chosen_layer, chosen_epochs):
+    acc = []
     learning_rates = [0.01, 0.03, 0.05]
     decays = [0.001, 0.005, 0.01, 0.1]
     for lr in learning_rates:
@@ -227,18 +235,26 @@ def tuning(train, batch_size, verbose):
             # val_acc = hist.history['val_accuracy']
             acc.append(hist.history['val_accuracy'][- 1])
     print(f' tune lr and decay acc = {acc}')
+    print(f'max accuracy index is {acc.index(max(acc))}')
     lr_index = round(acc.index(max(acc)) / 5)
     decey_index = acc.index(max(acc)) / lr_index
-    create_plot(range(1,13), acc, 'SGD parameters')
+    create_plot(range(1, 13), acc, 'SGD parameters')
+    print(f'lr index = {lr_index}, decay index = {decey_index}')
+    print(f'lr = {learning_rates[lr_index]}, decay = {decays[decey_index]}')
+    return learning_rates[lr_index], decays[decey_index]
 
+def tuning(train, batch_size, verbose):
+    '''tune hyper parameters to improve the model'''
+    chosen_activation = _tune_activation(train, batch_size, verbose)
+    chosen_layer = _tune_layer(train, batch_size, verbose, chosen_activation)
+    chosen_epochs = _tune_epochs(train, batch_size, verbose, chosen_activation, chosen_layer)
+    chosen_lr, chosen_decay = _tune_gsd(train, batch_size, verbose, chosen_activation, chosen_layer, chosen_epochs)
     print('######## Final Tuning Results ############')
     print(f'the chosen epochs is {chosen_epochs}')
     print(f'the chosen activation is {chosen_activation}')
-    print(f'max accuracy index is {acc.index(max(acc))}')
-    print(f'lr index = {lr_index}, decay index = {decey_index}')
-    print(f'lr = {learning_rates[lr_index]}, decay = {decays[decey_index]}')
+    print(f'lr = {chosen_lr}, decay = {chosen_decay}')
 
-    # do we need to decide by loss or by accuracy?????
+
 
 def recall_precision_curve(model,test_samples, test_labels, pred):
     '''creates precision curve'''
