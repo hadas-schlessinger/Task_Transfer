@@ -158,16 +158,25 @@ def takefirst(elem):
     return elem[0] #sort by second element function
 
 
+def create_plot(x, y, x_name):
+    plt.plot(x,y)
+    plt.ylabel('Accuracy')
+    plt.xlabel(x_name)
+    plt.title(f'Accuracy vs. {x_name}')
+    plt.ylim(0, 1)
+    plt.show()
+
+
 def tuning(train, batch_size, verbose):
     '''tune hyper parameters to improve the model'''
     # ---- train the net
     acc = []
-    for epochs in range(1,7):
+    for epochs in range(1, 7):
         print(f'epochs = {epochs}')
         model = reconstruct_net(S, NUMBER_OF_CLASSES,'sigmoid',SGD(lr=0.01, decay=0.001))
         hist = train_model(model, train, batch_size, epochs, verbose)
-        val_acc = hist.history['val_accuracy']
-        acc.append(val_acc[- 1])
+        acc.append(hist.history['val_accuracy'][- 1])
+    create_plot(range(1, 7), acc, 'Epochs')
     print(f' tune epochs acc = {acc}')
     chosen_epochs = acc.index(max(acc))+1
     acc.clear()
@@ -177,8 +186,9 @@ def tuning(train, batch_size, verbose):
         print(f'activation = {activation}')
         model = reconstruct_net(S, NUMBER_OF_CLASSES, activation, SGD(lr=0.01, decay=0.001))
         hist = train_model(model, train, batch_size, chosen_epochs, verbose)
-        val_acc = hist.history['val_accuracy']
-        acc.append(val_acc[-1])
+        #val_acc = hist.history['val_accuracy']
+        acc.append(hist.history['val_accuracy'][-1])
+    create_plot(activations, acc, 'Activation')
     print(f' tune activation acc = {acc}')
     chosen_activation = activations[acc.index(max(acc))]
     acc.clear()
@@ -189,17 +199,19 @@ def tuning(train, batch_size, verbose):
             print(f'leraning rate = {lr} and decay = {decay}')
             model = reconstruct_net(S, NUMBER_OF_CLASSES, chosen_activation, SGD(lr=lr, decay=decay))
             hist = train_model(model, train, batch_size, chosen_epochs, verbose)
-            val_acc = hist.history['val_accuracy']
-            acc.append(val_acc[- 1])
+            # val_acc = hist.history['val_accuracy']
+            acc.append(hist.history['val_accuracy'][- 1])
     print(f' tune lr and decay acc = {acc}')
+    lr_index = round(acc.index(max(acc)) / 5)
+    decey_index = acc.index(max(acc)) / lr_index
+    create_plot(range(1,13), acc, 'SGD parameters')
+
+    print('######## Final Tuning Results ############')
     print(f'the chosen epochs is {chosen_epochs}')
     print(f'the chosen activation is {chosen_activation}')
     print(f'max accuracy index is {acc.index(max(acc))}')
-    lr_index = round(acc.index(max(acc))/5)
-    decey_index = acc.index(max(acc))/lr_index
     print(f'lr index = {lr_index}, decay index = {decey_index}')
     print(f'lr = {learning_rates[lr_index]}, decay = {decays[decey_index]}')
-
 
     # do we need to decide by loss or by accuracy?????
 
