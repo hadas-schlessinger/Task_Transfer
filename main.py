@@ -18,7 +18,7 @@ from funcsigs import signature
 from keras.optimizers import SGD
 from keras.preprocessing import image
 from sklearn.model_selection import train_test_split
-#from sklearn.metrics import plot_precision_recall_curve, average_precision_score
+from sklearn.metrics import plot_precision_recall_curve, average_precision_score
 
 
 test_images_indices = []
@@ -33,6 +33,7 @@ data_path = os.path.join(os.getcwd(), 'FlowerData')  # The images path
 Mat_file = '/Users/noy/PycharmProjects/Task_Transfer/FlowerData/FlowerDataLabels.mat'
 NEEDS_AUG = True
 
+
 def set_and_split_data():
     '''set the images and split them'''
     train = {'data': [],
@@ -42,7 +43,6 @@ def set_and_split_data():
     # dictionary with variable names as keys, and loaded matrices as values.
     dictionary_labels = sio.loadmat(Mat_file, mdict=None, appendmat=True)
     labels_from_mat = np.transpose(dictionary_labels['Labels']).tolist()
-    # print(f'labels from mat is:{labels_from_mat}')
     labels_with_aug = []
 
     if NEEDS_AUG:
@@ -161,65 +161,82 @@ def take_first(elem):
     return elem[0] #sort by second element function
 
 
+def create_plot(x, y, x_name):
+    plt.plot(x,y)
+    plt.ylabel('Accuracy')
+    plt.xlabel(x_name)
+    plt.title(f'Accuracy vs. {x_name}')
+    plt.ylim(0, 1)
+    plt.show()
+
+
 def tuning(train, batch_size, verbose):
     '''tune hyper parameters to improve the model'''
     # ---- train the net
     acc = []
-    for epochs in range(1,7):
+    for epochs in range(1, 7):
         print(f'epochs = {epochs}')
         model = reconstruct_net(S, NUMBER_OF_CLASSES,'sigmoid',SGD(lr=0.01, decay=0.001))
         hist = train_model(model, train, batch_size, epochs, verbose)
-        val_acc = hist.history['val_accuracy']
-        acc.append(val_acc[len(val_acc) - 1])
-    print(acc)
+        acc.append(hist.history['val_accuracy'][- 1])
+    create_plot(range(1, 7), acc, 'Epochs')
+    print(f' tune epochs acc = {acc}')
     chosen_epochs = acc.index(max(acc))+1
     acc.clear()
-    activations = ['sigmoid','relu','softmax','elu','softsign','tanh']
 
+    activations = ['sigmoid', 'relu', 'softmax', 'elu', 'softsign', 'tanh']
     for activation in activations:
         print(f'activation = {activation}')
         model = reconstruct_net(S, NUMBER_OF_CLASSES, activation, SGD(lr=0.01, decay=0.001))
         hist = train_model(model, train, batch_size, chosen_epochs, verbose)
-        val_acc = hist.history['val_accuracy']
-        acc.append(val_acc[len(val_acc) - 1])
-    print(acc)
+        #val_acc = hist.history['val_accuracy']
+        acc.append(hist.history['val_accuracy'][-1])
+    create_plot(activations, acc, 'Activation')
+    print(f' tune activation acc = {acc}')
     chosen_activation = activations[acc.index(max(acc))]
     acc.clear()
-
-    for lr in [0.01, 0.02, 0.03, 0.04, 0.05]:
-        for decay in [0.001, 0.005, 0.01, 0.1]:
+    learning_rates = [0.01, 0.02, 0.03, 0.04, 0.05]
+    decays = [0.001, 0.005, 0.01, 0.1]
+    for lr in learning_rates:
+        for decay in decays:
             print(f'leraning rate = {lr} and decay = {decay}')
             model = reconstruct_net(S, NUMBER_OF_CLASSES, chosen_activation, SGD(lr=lr, decay=decay))
             hist = train_model(model, train, batch_size, chosen_epochs, verbose)
-            val_acc = hist.history['val_accuracy']
-            acc.append(val_acc[len(val_acc) - 1])
-    print(acc)
+            # val_acc = hist.history['val_accuracy']
+            acc.append(hist.history['val_accuracy'][- 1])
+    print(f' tune lr and decay acc = {acc}')
+    lr_index = round(acc.index(max(acc)) / 5)
+    decey_index = acc.index(max(acc)) / lr_index
+    create_plot(range(1,13), acc, 'SGD parameters')
+
+    print('######## Final Tuning Results ############')
     print(f'the chosen epochs is {chosen_epochs}')
     print(f'the chosen activation is {chosen_activation}')
     print(f'max accuracy index is {acc.index(max(acc))}')
-    print('lr = 0.03, decay = 0.1')
+    print(f'lr index = {lr_index}, decay index = {decey_index}')
+    print(f'lr = {learning_rates[lr_index]}, decay = {decays[decey_index]}')
 
     # do we need to decide by loss or by accuracy?????
 
 def recall_precision_curve(model,test_samples, test_labels, pred):
     '''creates precision curve'''
-    precision = dict()
-    recall = dict()
-    for i in range(2):
-        precision[i], recall[i], _ = precision_recall_curve(test_labels[:, i], pred[:, i])
-    precision["micro"], recall["micro"], _ = precision_recall_curve(test_labels.ravel(), pred.ravel())
-    fig = plt.figure()
-    step_kwargs = ({'step': 'post'} if 'step' in signature(plt.fill_between).parameters else {})
-    plt.step(recall['micro'], precision['micro'], color='b', alpha=0.2, where='post')
-    plt.fill_between(recall["micro"], precision["micro"], alpha=0.2, color='b', **step_kwargs)
-    plt.xlabel('Recall'), plt.ylabel('Precision'), plt.title('Precision Recall Curve')
-    plt.show()
+    # precision = dict()
+    # recall = dict()
+    # for i in range(2):
+    #     precision[i], recall[i], _ = precision_recall_curve(test_labels[:, i], pred[:, i])
+    # precision["micro"], recall["micro"], _ = precision_recall_curve(test_labels.ravel(), pred.ravel())
+    # fig = plt.figure()
+    # step_kwargs = ({'step': 'post'} if 'step' in signature(plt.fill_between).parameters else {})
+    # plt.step(recall['micro'], precision['micro'], color='b', alpha=0.2, where='post')
+    # plt.fill_between(recall["micro"], precision["micro"], alpha=0.2, color='b', **step_kwargs)
+    # plt.xlabel('Recall'), plt.ylabel('Precision'), plt.title('Precision Recall Curve')
+    # plt.show()
+    average_precision = average_precision_score(test_labels, pred)
+    print('Average precision-recall score: {0:0.2f}'.format(average_precision))
+    disp = plot_precision_recall_curve(model, test_samples, test_labels)
+    disp.ax_.set_title('2-class Precision-Recall curve: '
+                       'AP={0:0.2f}'.format(average_precision))
 
-    # average_precision = average_precision_score(test_labels, pred)
-    # print('Average precision-recall score: {0:0.2f}'.format(average_precision))
-    # disp = plot_precision_recall_curve(model, test_samples, test_labels)
-    # disp.ax_.set_title('2-class Precision-Recall curve: '
-    #                    'AP={0:0.2f}'.format(average_precision))
 
 def create_data_augmentation():
     ''' create images of train tranpose on the y axis'''
@@ -227,11 +244,6 @@ def create_data_augmentation():
         image_dir_file = data_path + "/" + str(i) + ".jpeg"
         image2 = Image.open(image_dir_file).transpose(Image.FLIP_LEFT_RIGHT)
         image2.save(data_path + '/' + str(i + 472) + ".jpeg")
-
-
-def report_results(predictions, error_type_array):
-    '''prints the wrong images'''
-    pass
 
 
 ################# main ####################
