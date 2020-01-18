@@ -5,43 +5,34 @@ import numpy as np
 import cv2
 import keras
 import matplotlib.pyplot as plt
-import matplotlib.image as mpimg
 from PIL import Image
 import keras.applications
-
-from keras.layers import merge, Input
-from keras.layers import Dense
+from keras.layers import Input, Dense
 from keras.models import Model
-from keras.preprocessing import image
-# from keras.applications.imagenet_utils import preprocess_input
 from keras.applications.resnet_v2 import preprocess_input
-from keras import metrics
-import sklearn
 from sklearn.metrics import precision_recall_curve
 from funcsigs import signature
 from keras.optimizers import SGD
 from keras.preprocessing import image
 from sklearn.model_selection import train_test_split
-# from sklearn.metrics import plot_precision_recall_curve, average_precision_score
 
-from keras import applications
-# resnet = applications.ResNeXt101(include_top=False, weights='imagenet', input_shape=(SCALED_HEIGHT, SCALED_WIDTH, 3), pooling=None)
 
-test_images_indices = list(range(301,472))
+test_images_indices = list(range(301,473))
 
 # env variables
 S = 224
 NUMBER_OF_CLASSES = 1
 BATCH_SIZE = 16
-EPOCHS = 12
+EPOCHS = 2
 VERBOSE = 1
+ACTIVATION = 'sigmoid'
 data_path = os.path.join(os.getcwd(), 'FlowerData')  # The images path
 Mat_file = os.path.join(os.getcwd(), 'FlowerData/FlowerDataLabels.mat')
 NEEDS_AUG = True
 LR = 0.03
-DECAY = 0.001
+DECAY = 0.01
 LAYERS_TO_TRAIN = -3
-THRESHOLD = 0.55
+THRESHOLD = 0.45
 
 def set_and_split_data():
     '''set the images and split them'''
@@ -57,13 +48,6 @@ def set_and_split_data():
         image_dir_file = data_path + "/" + str(i + 1) + ".jpeg"
         # image read and converting it image pixels to a numpy array
         a = preprocess_input(np.expand_dims(image.img_to_array(image.load_img(image_dir_file, target_size=(S, S))), axis=0))
-        # pixels = image.img_to_array(image.load_img(image_dir_file, target_size=(S, S)))
-        # pixels = pixels.astype('float32')
-        # # calculate per-channel means and standard deviations
-        # means = pixels.mean(axis=(0,1), dtype='float64')
-        # # per-channel centering of pixels
-        # pixels -= means
-        # a = preprocess_input(np.expand_dims(pixels, axis=0))
 
         if i in test_images_indices:  # inserts the test set
             test['data'].append(a)  # accumulate image array
@@ -74,14 +58,9 @@ def set_and_split_data():
             a_aug = Image.open(image_dir_file).transpose(Image.FLIP_LEFT_RIGHT)# create image augmentation
             aug_dir_file = data_path + "/" + str(i +1000) + ".jpeg"
             a_aug.save(aug_dir_file)
-            a_aug = preprocess_input(np.expand_dims(image.img_to_array(image.load_img(image_dir_file, target_size=(S, S))), axis=0))
-            # pixels = image.img_to_array(image.load_img(aug_dir_file, target_size=(S, S)))
-            # pixels = pixels.astype('float32')
-            # means = pixels.mean(axis=(0, 1), dtype='float64')
-            # pixels -= means
-            # a_aug = preprocess_input(np.expand_dims(pixels, axis=0))
-            # train['data'].append(a_aug)  # connect a to the big 4D array of input images
-            # train['labels'].append(labels_from_mat[i])  # divide the dictionary into labels vector of train
+            a_aug = preprocess_input(np.expand_dims(image.img_to_array(image.load_img(aug_dir_file, target_size=(S, S))), axis=0))
+            train['data'].append(a_aug)  # connect a to the big 4D array of input images
+            train['labels'].append(labels_from_mat[i])  # divide the dictionary into labels vector of train
 
 
     # changing the train anf test into numpy array for fitting
@@ -106,7 +85,6 @@ def set_and_split_data():
 
 
 
-
 def reconstruct_net(activation, optimizer, what_to_train):
     '''export the net without the last layer'''
     image_input = Input(shape=(S, S, 3))
@@ -117,7 +95,6 @@ def reconstruct_net(activation, optimizer, what_to_train):
     for layer in model_without_last_layer.layers[:what_to_train]:  # All layers are not trainable besides last one
         layer.trainable = False
     model_without_last_layer.compile(loss='binary_crossentropy', optimizer=optimizer, metrics=['accuracy'])
-
     # model_without_last_layer.summary()
     return model_without_last_layer
 
@@ -152,9 +129,6 @@ def error_type(predictions, test_labels):
     """returns a vector of all error types
     "Type 1: miss-detection: the algorithm thought it is not an flower, but it is
     Type 2: false alarm: the algorithm thought it is an flower, but it is not """
-    errors = {'type 1': [], 'type 2': []}
-    errors['type 1'] = {'index': [], 'score': []}
-    errors['type 2'] = {'index': [], 'score': []}
     score_type_1 = []
     score_type_2 = []
     for i in range(len(predictions)):
@@ -190,14 +164,7 @@ def error_type(predictions, test_labels):
             plt.show()
     else:
         print("There is no type 2 errors")
-<<<<<<< HEAD
 
-=======
-    #all errors
-    # errors['type 1'] = {'index': take_first(score_type_1), 'distance': take_second(score_type_1)}
-    # errors['type 2'] = {'index': take_first(score_type_2), 'distance': take_second(score_type_2)}
-    # return errors
->>>>>>> 00f663b0c0f39611050f29da513258f6e325ca4c
 
 
 def take_second(elem):
@@ -223,7 +190,7 @@ def _tune_activation(train, validation, batch_size, verbose):
     for activation in activations:
         print(f'activation = {activation}')
         model = reconstruct_net(activation, SGD(lr=0.01, decay=0.001), LAYERS_TO_TRAIN)
-        hist = train_model(model, train, batch_size, EPOCHS, verbose)
+        hist = train_model(model, train['data'], train['labels'], validation['data'], validation['labels'], batch_size, EPOCHS, verbose)
         acc.append(hist.history['val_accuracy'][-1])
     create_plot(activations, acc, 'Activation')
     print(f' tune activation acc = {acc}')
@@ -248,12 +215,12 @@ def _tune_layer(train, validation,batch_size, verbose, chosen_activation):
 
 def _tune_epochs(train, validation,batch_size, verbose, chosen_activation, chosen_layer):
     acc = []
-    for epochs in range(1, 7):
+    for epochs in range(1, 8):
         print(f'epochs = {epochs}')
         model = reconstruct_net(chosen_activation, SGD(lr=0.01, decay=0.001), chosen_layer)
         hist = train_model(model, train['data'], train['labels'], validation['data'], validation['labels'], batch_size, epochs, verbose)
         acc.append(hist.history['val_accuracy'][- 1])
-    create_plot(range(1, 7), acc, 'Epochs')
+    accuracy_plot(hist)
     print(f' tune epochs acc = {acc}')
     chosen_epochs = acc.index(max(acc)) + 1
     print(f'the chosen epochs is {chosen_epochs}')
@@ -273,7 +240,7 @@ def _tune_gsd(train, validation,batch_size, verbose, chosen_activation, chosen_l
     print(f' tune lr and decay acc = {acc}')
     print(f'max accuracy index is {acc.index(max(acc))}')
     lr_index = round(acc.index(max(acc)) / 3)
-    decey_index = acc.index(max(acc)) / lr_index
+    decey_index = int(acc.index(max(acc)) / lr_index)
     create_plot(range(1, 13), acc, 'SGD parameters')
     print(f'lr index = {lr_index}, decay index = {decey_index}')
     return learning_rates[lr_index], decays[decey_index]
@@ -294,23 +261,29 @@ def _tune_threshold(val_labels, val_data, chosen_activation, lr, decay, chosen_l
     print(f' tune threshold acc = {acc}')
     chosen_thresh = thresholds[acc.index(max(acc))]
     print(f'threshold is: {chosen_thresh}')
-
+    create_plot(thresholds, acc, 'Threshold')
+    return chosen_thresh
 
 def tuning(train, validation, batch_size, verbose):
     '''tune hyper parameters to improve the model'''
-    chosen_activation = _tune_activation(train, validation, batch_size, verbose)
-    chosen_layer = _tune_layer(train, validation,  batch_size, verbose, chosen_activation)
-    chosen_epochs = _tune_epochs(train, validation, batch_size, verbose, chosen_activation, chosen_layer)
-    chosen_lr, chosen_decay = _tune_gsd(train, validation,  batch_size, verbose, chosen_activation, chosen_layer, chosen_epochs)
+    # chosen_activation = _tune_activation(train, validation, batch_size, verbose)
+    # chosen_layer = _tune_layer(train, validation,  batch_size, verbose, chosen_activation)
+    # chosen_epochs = _tune_epochs(train, validation, batch_size, verbose, chosen_activation, chosen_layer)
+    # chosen_lr, chosen_decay = _tune_gsd(train, validation,  batch_size, verbose, chosen_activation, chosen_layer, chosen_epochs)
+    chosen_activation = 'sigmoid'
+    chosen_layer = -3
+    chosen_epochs = 2
+    chosen_lr = LR
+    chosen_decay = DECAY
     threshold = _tune_threshold(validation['labels'], validation['data'], chosen_activation, chosen_lr, chosen_decay, chosen_layer, train, chosen_epochs)
     print('######## Final Tuning Results ############')
     print(f'the chosen epochs is {chosen_epochs}')
     print(f'the chosen activation is {chosen_activation}')
     print(f'lr = {chosen_lr}, decay = {chosen_decay}')
-    print(f'the chosen threshold is {chosen_activation}')
+    print(f'the chosen threshold is {threshold}')
 
 
-def recall_precision_curve(model,test_samples, test_labels, pred):
+def recall_precision_curve(test_labels, pred):
     '''creates precision curve'''
     precision = dict()
     recall = dict()
@@ -330,8 +303,7 @@ def show_images(images):
         plt.imshow(images[i])
         plt.show()
 
-<<<<<<< HEAD
-=======
+
 def accuracy_plot(history):
     # summarize history for accuracy
     plt.plot(history.history['accuracy'])
@@ -349,26 +321,18 @@ def accuracy_plot(history):
     # plt.xlabel('epoch')
     # plt.legend(['train', 'test'], loc='upper left')
     # plt.show()
->>>>>>> 00f663b0c0f39611050f29da513258f6e325ca4c
 
 ################# main ####################
 def main():
     np.random.seed(0)  # seed
-<<<<<<< HEAD
     train, test, validation = set_and_split_data()
-    #tuning(train, BATCH_SIZE, VERBOSE)
-    res_net_new = reconstruct_net('sigmoid', SGD(lr = LR, decay = DECAY), LAYERS_TO_TRAIN)  # preparing the network
+    #tuning(train,validation, BATCH_SIZE, VERBOSE)
+    res_net_new = reconstruct_net(ACTIVATION, SGD(lr = LR, decay = DECAY), LAYERS_TO_TRAIN)  # preparing the network
     train_model(res_net_new, train['data'], train['labels'], validation['data'], validation['labels'], BATCH_SIZE, EPOCHS, VERBOSE) # train and validation stage
-=======
-    train, test = set_and_split_data()
-    # tuning(train, BATCH_SIZE, VERBOSE)
-    res_net_new = reconstruct_net('sigmoid', SGD(lr = LR, decay = DECAY), LAYERS_TO_TRAIN)  # preparing the network
-    history = train_model(res_net_new, train, BATCH_SIZE, EPOCHS, VERBOSE) # train and validation stage
-    accuracy_plot(history)
->>>>>>> 00f663b0c0f39611050f29da513258f6e325ca4c
+ # preparing the network
     predictions = test_model(res_net_new, test, BATCH_SIZE, VERBOSE)  # test stage
-    # error_type(predictions, test['labels'])  # find the error types
-    # recall_precision_curve(res_net_new, np.array(test['data']), np.array(test['labels']), np.array(predictions))  # recall-precision curve
+    error_type(predictions, test['labels'])  # find the error types
+    recall_precision_curve(np.array(test['labels']), np.array(predictions))  # recall-precision curve
 
 
 if __name__ == "__main__":
