@@ -191,7 +191,6 @@ def tuning(train, batch_size, verbose):
         print(f'activation = {activation}')
         model = reconstruct_net(activation, SGD(lr=0.01, decay=0.001), LAYERS_TO_TRAIN)
         hist = train_model(model, train, batch_size, chosen_epochs, verbose)
-        #val_acc = hist.history['val_accuracy']
         acc.append(hist.history['val_accuracy'][-1])
     create_plot(activations, acc, 'Activation')
     print(f' tune activation acc = {acc}')
@@ -202,14 +201,13 @@ def tuning(train, batch_size, verbose):
         print(f'layer = {layer}')
         model = reconstruct_net(chosen_activation, SGD(lr=0.01, decay=0.001), layer)
         hist = train_model(model, train, batch_size, chosen_epochs, verbose)
-        # val_acc = hist.history['val_accuracy']
         acc.append(hist.history['val_accuracy'][-1])
     create_plot(range(1,6), acc, 'Number of layers to train')
     print(f' tune layers acc = {acc}')
     chosen_layer = acc.index(max(acc))+1
     acc.clear()
 
-    learning_rates = [0.01, 0.02, 0.03, 0.04, 0.05]
+    learning_rates = [0.01, 0.03, 0.05]
     decays = [0.001, 0.005, 0.01, 0.1]
     for lr in learning_rates:
         for decay in decays:
