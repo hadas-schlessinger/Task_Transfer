@@ -18,13 +18,13 @@ from funcsigs import signature
 from keras.optimizers import SGD
 from keras.preprocessing import image
 from sklearn.model_selection import train_test_split
-#from sklearn.metrics import plot_precision_recall_curve, average_precision_score
+from sklearn.metrics import plot_precision_recall_curve, average_precision_score
 
 
 test_images_indices = []
 # env variables
 S = 224
-NUMBER_OF_CLASSES = 2
+NUMBER_OF_CLASSES = 1
 BATCH_SIZE = 16
 EPOCHS = 1
 VERBOSE = 1
@@ -32,6 +32,7 @@ TRAIN_SIZE = 300  # number of pictures from the data to train
 data_path = os.path.join(os.getcwd(), 'FlowerData')  # The images path
 Mat_file = '/Users/noy/PycharmProjects/Task_Transfer/FlowerData/FlowerDataLabels.mat'
 NEEDS_AUG = True
+
 
 def set_and_split_data():
     '''set the images and split them'''
@@ -125,7 +126,7 @@ def error_type(predictions, test_labels):
     for i in range(len(predictions)):
         predict_1 = predictions[i][1]
         if predict_1 <= 0.5 and test_labels[i][1] == 1:  # type 1: thought it's not flower(0) but it's (1)
-            score_type_1.append((i+301, predict_1))#wich score?
+            score_type_1.append((i+301, predict_1))# wich score?
         if predict_1 > 0.5 and test_labels[i][0] == 1:  # type 2: thought it's flower (1) but it's not (0)
             score_type_2.append((i+301, predict_1))
     score_type_1.sort(key = takeSecond)
@@ -166,56 +167,61 @@ def tuning(train, batch_size, verbose):
         model = reconstruct_net(S, NUMBER_OF_CLASSES,'sigmoid',SGD(lr=0.01, decay=0.001))
         hist = train_model(model, train, batch_size, epochs, verbose)
         val_acc = hist.history['val_accuracy']
-        acc.append(val_acc[len(val_acc) - 1])
-    print(acc)
+        acc.append(val_acc[- 1])
+    print(f' tune epochs acc = {acc}')
     chosen_epochs = acc.index(max(acc))+1
     acc.clear()
-    activations = ['sigmoid','relu','softmax','elu','softsign','tanh']
 
+    activations = ['sigmoid', 'relu', 'softmax', 'elu', 'softsign', 'tanh']
     for activation in activations:
         print(f'activation = {activation}')
         model = reconstruct_net(S, NUMBER_OF_CLASSES, activation, SGD(lr=0.01, decay=0.001))
         hist = train_model(model, train, batch_size, chosen_epochs, verbose)
         val_acc = hist.history['val_accuracy']
-        acc.append(val_acc[len(val_acc) - 1])
-    print(acc)
+        acc.append(val_acc[-1])
+    print(f' tune activation acc = {acc}')
     chosen_activation = activations[acc.index(max(acc))]
     acc.clear()
-
-    for lr in [0.01, 0.02, 0.03, 0.04, 0.05]:
-        for decay in [0.001, 0.005, 0.01, 0.1]:
+    learning_rates = [0.01, 0.02, 0.03, 0.04, 0.05]
+    decays = [0.001, 0.005, 0.01, 0.1]
+    for lr in learning_rates:
+        for decay in decays:
             print(f'leraning rate = {lr} and decay = {decay}')
             model = reconstruct_net(S, NUMBER_OF_CLASSES, chosen_activation, SGD(lr=lr, decay=decay))
             hist = train_model(model, train, batch_size, chosen_epochs, verbose)
             val_acc = hist.history['val_accuracy']
-            acc.append(val_acc[len(val_acc) - 1])
-    print(acc)
+            acc.append(val_acc[- 1])
+    print(f' tune lr and decay acc = {acc}')
     print(f'the chosen epochs is {chosen_epochs}')
     print(f'the chosen activation is {chosen_activation}')
     print(f'max accuracy index is {acc.index(max(acc))}')
-    print('lr = 0.03, decay = 0.1')
+    lr_index = round(acc.index(max(acc))/5)
+    decey_index = acc.index(max(acc))/lr_index
+    print(f'lr index = {lr_index}, decay index = {decey_index}')
+    print(f'lr = {learning_rates[lr_index]}, decay = {decays[decey_index]}')
+
 
     # do we need to decide by loss or by accuracy?????
 
 def recall_precision_curve(model,test_samples, test_labels, pred):
     '''creates precision curve'''
-    precision = dict()
-    recall = dict()
-    for i in range(2):
-        precision[i], recall[i], _ = precision_recall_curve(test_labels[:, i], pred[:, i])
-    precision["micro"], recall["micro"], _ = precision_recall_curve(test_labels.ravel(), pred.ravel())
-    fig = plt.figure()
-    step_kwargs = ({'step': 'post'} if 'step' in signature(plt.fill_between).parameters else {})
-    plt.step(recall['micro'], precision['micro'], color='b', alpha=0.2, where='post')
-    plt.fill_between(recall["micro"], precision["micro"], alpha=0.2, color='b', **step_kwargs)
-    plt.xlabel('Recall'), plt.ylabel('Precision'), plt.title('Precision Recall Curve')
-    plt.show()
+    # precision = dict()
+    # recall = dict()
+    # for i in range(2):
+    #     precision[i], recall[i], _ = precision_recall_curve(test_labels[:, i], pred[:, i])
+    # precision["micro"], recall["micro"], _ = precision_recall_curve(test_labels.ravel(), pred.ravel())
+    # fig = plt.figure()
+    # step_kwargs = ({'step': 'post'} if 'step' in signature(plt.fill_between).parameters else {})
+    # plt.step(recall['micro'], precision['micro'], color='b', alpha=0.2, where='post')
+    # plt.fill_between(recall["micro"], precision["micro"], alpha=0.2, color='b', **step_kwargs)
+    # plt.xlabel('Recall'), plt.ylabel('Precision'), plt.title('Precision Recall Curve')
+    # plt.show()
+    average_precision = average_precision_score(test_labels, pred)
+    print('Average precision-recall score: {0:0.2f}'.format(average_precision))
+    disp = plot_precision_recall_curve(model, test_samples, test_labels)
+    disp.ax_.set_title('2-class Precision-Recall curve: '
+                       'AP={0:0.2f}'.format(average_precision))
 
-    # average_precision = average_precision_score(test_labels, pred)
-    # print('Average precision-recall score: {0:0.2f}'.format(average_precision))
-    # disp = plot_precision_recall_curve(model, test_samples, test_labels)
-    # disp.ax_.set_title('2-class Precision-Recall curve: '
-    #                    'AP={0:0.2f}'.format(average_precision))
 
 def create_data_augmentation():
     ''' create images of train tranpose on the y axis'''
@@ -223,11 +229,6 @@ def create_data_augmentation():
         image_dir_file = data_path + "/" + str(i) + ".jpeg"
         image2 = Image.open(image_dir_file).transpose(Image.FLIP_LEFT_RIGHT)
         image2.save(data_path + '/' + str(i + 472) + ".jpeg")
-
-
-def report_results(predictions, error_type_array):
-    '''prints the wrong images'''
-    pass
 
 
 ################# main ####################
