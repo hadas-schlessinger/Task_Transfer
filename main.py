@@ -39,7 +39,8 @@ def set_and_split_data():
     train = {'data': [],
              'labels': []}
     test = {'data': [],
-            'labels': []}
+            'labels': [],
+            'index':[]}
     # dictionary with variable names as keys, and loaded matrices as values.
     dictionary_labels = sio.loadmat(Mat_file, mdict=None, appendmat=True)
     labels_from_mat = np.transpose(dictionary_labels['Labels']).tolist()
@@ -52,6 +53,7 @@ def set_and_split_data():
         if i in test_images_indices:  # inserts the test set
             test['data'].append(a)  # accumulate image array
             test['labels'].append(labels_from_mat[i])  # divide the dictionary into labels vector of test
+            test['index'].append(i)
         else:  # inserts the train set and it's augmentation image into train set
             train['data'].append(a)  # connect a to the big 4D array of input images
             train['labels'].append(labels_from_mat[i])  # divide the dictionary into labels vector of train
@@ -81,6 +83,17 @@ def set_and_split_data():
         'data': valid_images,
         'labels': valid_labels
     }
+
+    print(test['labels'][83])
+    print(test['labels'][4])
+    print(test['labels'][18])
+    print(test['labels'][82])
+    print(test['labels'][33])
+    print(test['labels'][167])
+    print(test['labels'][50])
+    print(test['labels'][105])
+    print(test['labels'][97])
+    print(test['labels'][140])
     return train, test, validation
 
 
@@ -113,7 +126,7 @@ def test_model(model, test, batch_size, verbose):
     new_acc = _calc_accuracy(test['labels'], new_predictions)
     print(f'################################################')
     print(f'the new prediction labels are {new_predictions}')
-    print(f'the new accuracy according to the new treshold is {round(new_acc*100,4)}')
+    print(f'the new accuracy according to the new treshold is {round(new_acc*100,4)}%')
     return model.predict(test['data'])  # returns the predictions
 
 
