@@ -49,7 +49,6 @@ def set_and_split_data():
         image_dir_file = data_path + "/" + str(i + 1) + ".jpeg"
         # image read and converting it image pixels to a numpy array
         a = preprocess_input(np.expand_dims(image.img_to_array(image.load_img(image_dir_file, target_size=(S, S))), axis=0))
-
         if i in test_images_indices:  # inserts the test set
             test['data'].append(a)  # accumulate image array
             test['labels'].append(labels_from_mat[i])  # divide the dictionary into labels vector of test
@@ -63,12 +62,9 @@ def set_and_split_data():
             a_aug = preprocess_input(np.expand_dims(image.img_to_array(image.load_img(aug_dir_file, target_size=(S, S))), axis=0))
             train['data'].append(a_aug)  # connect a to the big 4D array of input images
             train['labels'].append(labels_from_mat[i])  # divide the dictionary into labels vector of train
-
-
     # changing the train anf test into numpy array for fitting
     train['data'] = np.rollaxis(np.array(train['data']), 1, 0)[0]
     test['data'] = np.rollaxis(np.array(test['data']), 1, 0)[0]
-
     # changing the labels into numpy array for fitting
     train['labels'] = np.array(train['labels'])
     test['labels'] = np.array(test['labels'])
@@ -83,17 +79,6 @@ def set_and_split_data():
         'data': valid_images,
         'labels': valid_labels
     }
-
-    print(test['labels'][83])
-    print(test['labels'][4])
-    print(test['labels'][18])
-    print(test['labels'][82])
-    print(test['labels'][33])
-    print(test['labels'][167])
-    print(test['labels'][50])
-    print(test['labels'][105])
-    print(test['labels'][97])
-    print(test['labels'][140])
     return train, test, validation
 
 
@@ -150,11 +135,8 @@ def error_type(predictions, test_labels):
         index_i = test_images_indices[i]
         if predict_1 <= 0.5 and test_labels[i] == 1:  # type 1: thought it's not flower(0) but it's (1)
             score_type_1.append((index_i, predict_1))
-            print(f' predict  of type 1 is: {predict_1} and the index is {index_i}')
         if predict_1 > 0.5 and test_labels[i] == 0:  # type 2: thought it's flower (1) but it's not (0)
             score_type_2.append((index_i,predict_1))
-            print(f' predict  of type 2 is: {predict_1} and the index is {index_i}')
-
     score_type_1.sort(key=take_second,reverse=False)#sort by min
     score_type_2.sort(key=take_second,reverse=True)#sort by max
     min_score_type_1 = score_type_1[0:min(len(score_type_1),5)]
@@ -322,23 +304,15 @@ def accuracy_plot(history):
     plt.xlabel('epoch')
     plt.legend(['train', 'val'], loc='upper left')
     plt.show()
-    # # summarize history for loss
-    # plt.plot(history.history['loss'])
-    # plt.plot(history.history['val_loss'])
-    # plt.title('model loss')
-    # plt.ylabel('loss')
-    # plt.xlabel('epoch')
-    # plt.legend(['train', 'test'], loc='upper left')
-    # plt.show()
+
 
 ################# main ####################
 def main():
-    np.random.seed(0)  # seed
+    np.random.seed(0)
     train, test, validation = set_and_split_data()
-    #tuning(train,validation, BATCH_SIZE, VERBOSE)
+    # tuning(train,validation, BATCH_SIZE, VERBOSE)
     res_net_new = reconstruct_net(ACTIVATION, SGD(lr = LR, decay = DECAY), LAYERS_TO_TRAIN)  # preparing the network
-    train_model(res_net_new, train['data'], train['labels'], validation['data'], validation['labels'], BATCH_SIZE, EPOCHS, VERBOSE) # train and validation stage
- # preparing the network
+    train_model(res_net_new, train['data'], train['labels'], validation['data'], validation['labels'], BATCH_SIZE, EPOCHS, VERBOSE) # train stage
     predictions = test_model(res_net_new, test, BATCH_SIZE, VERBOSE)  # test stage
     error_type(predictions, test['labels'])  # find the error types
     recall_precision_curve(np.array(test['labels']), np.array(predictions))  # recall-precision curve
