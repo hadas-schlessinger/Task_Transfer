@@ -30,9 +30,11 @@ EPOCHS = 1
 VERBOSE = 1
 TRAIN_SIZE = 300  # number of pictures from the data to train
 data_path = os.path.join(os.getcwd(), 'FlowerData')  # The images path
-Mat_file = '/Users/noy/PycharmProjects/Task_Transfer/FlowerData/FlowerDataLabels.mat'
+Mat_file = os.path.join(os.getcwd(), 'FlowerData/FlowerDataLabels.mat')
 NEEDS_AUG = True
-
+LR = 0.01
+DECAY = 0.001
+LAYERS_TO_TRAIN = -1
 
 def set_and_split_data():
     '''set the images and split them'''
@@ -84,14 +86,14 @@ def set_and_split_data():
     return train, test
 
 
-def reconstruct_net(s, num_classes, activation, optimizer):
+def reconstruct_net(s, num_classes, activation, optimizer, what_to_train):
     '''export the net without the last layer'''
     image_input = Input(shape=(s, s, 3))
     basic_model = keras.applications.resnet_v2.ResNet50V2(include_top=True, weights='imagenet', input_tensor=image_input)
     last_layer_minus_1 = basic_model.layers[-2].output
     model_without_last_layer = Model(image_input, Dense(num_classes, activation=activation, name='output')(last_layer_minus_1))
     model_without_last_layer.summary()
-    for layer in model_without_last_layer.layers[:-1]:  # All layers are not trainable besides last one
+    for layer in model_without_last_layer.layers[:what_to_train]:  # All layers are not trainable besides last one
         layer.trainable = False
     model_without_last_layer.compile(loss='binary_crossentropy', optimizer=optimizer, metrics=['accuracy'])
     # model_without_last_layer.summary()
@@ -176,7 +178,7 @@ def tuning(train, batch_size, verbose):
     acc = []
     for epochs in range(1, 7):
         print(f'epochs = {epochs}')
-        model = reconstruct_net(S, NUMBER_OF_CLASSES,'sigmoid',SGD(lr=0.01, decay=0.001))
+        model = reconstruct_net(S, NUMBER_OF_CLASSES,'sigmoid',SGD(lr=0.01, decay=0.001), LAYERS_TO_TRAIN)
         hist = train_model(model, train, batch_size, epochs, verbose)
         acc.append(hist.history['val_accuracy'][- 1])
     create_plot(range(1, 7), acc, 'Epochs')
@@ -187,7 +189,7 @@ def tuning(train, batch_size, verbose):
     activations = ['sigmoid', 'relu', 'softmax', 'elu', 'softsign', 'tanh']
     for activation in activations:
         print(f'activation = {activation}')
-        model = reconstruct_net(S, NUMBER_OF_CLASSES, activation, SGD(lr=0.01, decay=0.001))
+        model = reconstruct_net(S, NUMBER_OF_CLASSES, activation, SGD(lr=0.01, decay=0.001), LAYERS_TO_TRAIN)
         hist = train_model(model, train, batch_size, chosen_epochs, verbose)
         #val_acc = hist.history['val_accuracy']
         acc.append(hist.history['val_accuracy'][-1])
@@ -195,12 +197,24 @@ def tuning(train, batch_size, verbose):
     print(f' tune activation acc = {acc}')
     chosen_activation = activations[acc.index(max(acc))]
     acc.clear()
+
+    for layer in [-1, -2, -3, -4, -5]:
+        print(f'layer = {layer}')
+        model = reconstruct_net(S, NUMBER_OF_CLASSES, chosen_activation, SGD(lr=0.01, decay=0.001), layer)
+        hist = train_model(model, train, batch_size, chosen_epochs, verbose)
+        # val_acc = hist.history['val_accuracy']
+        acc.append(hist.history['val_accuracy'][-1])
+    create_plot(range(1,6), acc, 'Number of layers to train')
+    print(f' tune layers acc = {acc}')
+    chosen_layer = acc.index(max(acc))+1
+    acc.clear()
+
     learning_rates = [0.01, 0.02, 0.03, 0.04, 0.05]
     decays = [0.001, 0.005, 0.01, 0.1]
     for lr in learning_rates:
         for decay in decays:
             print(f'leraning rate = {lr} and decay = {decay}')
-            model = reconstruct_net(S, NUMBER_OF_CLASSES, chosen_activation, SGD(lr=lr, decay=decay))
+            model = reconstruct_net(S, NUMBER_OF_CLASSES, chosen_activation, SGD(lr=lr, decay=decay), chosen_layer)
             hist = train_model(model, train, batch_size, chosen_epochs, verbose)
             # val_acc = hist.history['val_accuracy']
             acc.append(hist.history['val_accuracy'][- 1])
@@ -220,22 +234,24 @@ def tuning(train, batch_size, verbose):
 
 def recall_precision_curve(model,test_samples, test_labels, pred):
     '''creates precision curve'''
-    # precision = dict()
-    # recall = dict()
-    # for i in range(2):
-    #     precision[i], recall[i], _ = precision_recall_curve(test_labels[:, i], pred[:, i])
-    # precision["micro"], recall["micro"], _ = precision_recall_curve(test_labels.ravel(), pred.ravel())
-    # fig = plt.figure()
-    # step_kwargs = ({'step': 'post'} if 'step' in signature(plt.fill_between).parameters else {})
-    # plt.step(recall['micro'], precision['micro'], color='b', alpha=0.2, where='post')
-    # plt.fill_between(recall["micro"], precision["micro"], alpha=0.2, color='b', **step_kwargs)
-    # plt.xlabel('Recall'), plt.ylabel('Precision'), plt.title('Precision Recall Curve')
-    # plt.show()
-    average_precision = average_precision_score(test_labels, pred)
-    print('Average precision-recall score: {0:0.2f}'.format(average_precision))
-    disp = plot_precision_recall_curve(model, test_samples, test_labels)
-    disp.ax_.set_title('2-class Precision-Recall curve: '
-                       'AP={0:0.2f}'.format(average_precision))
+    precision = dict()
+    recall = dict()
+   # for i in range(2):
+    precision[0], recall[0], _ = precision_recall_curve(test_labels[:, 0], pred[:, 0])
+    precision["micro"], recall["micro"], _ = precision_recall_curve(test_labels.ravel(), pred.ravel())
+    fig = plt.figure()
+    step_kwargs = ({'step': 'post'} if 'step' in signature(plt.fill_between).parameters else {})
+    plt.step(recall['micro'], precision['micro'], color='b', alpha=0.2, where='post')
+    plt.fill_between(recall["micro"], precision["micro"], alpha=0.2, color='b', **step_kwargs)
+    plt.xlabel('Recall'), plt.ylabel('Precision'), plt.title('Precision Recall Curve')
+    plt.show()
+    # print(model)
+    # print(test_labels)
+    # average_precision = average_precision_score(test_labels, pred)
+    # print('Average precision-recall score: {0:0.2f}'.format(average_precision))
+    # disp = plot_precision_recall_curve(model, test_samples, np.array(test_labels))
+    # disp.ax_.set_title('2-class Precision-Recall curve: '
+    #                    'AP={0:0.2f}'.format(average_precision))
 
 
 def create_data_augmentation():
@@ -252,11 +268,12 @@ def main():
     # create_data_augmentation()
     train, test = set_and_split_data()
     # tuning(train, BATCH_SIZE, VERBOSE)
-    res_net_new = reconstruct_net(S, NUMBER_OF_CLASSES,'sigmoid',SGD(lr=0.01, decay=0.001))  # preparing the network
+    res_net_new = reconstruct_net(S, NUMBER_OF_CLASSES, 'sigmoid', SGD(lr = LR, decay = DECAY), LAYERS_TO_TRAIN)  # preparing the network
     train_model(res_net_new, train, BATCH_SIZE, EPOCHS, VERBOSE) # train and validation stage
     predictions = test_model(res_net_new, test, BATCH_SIZE, VERBOSE)  # test stage
     error_type_array = error_type(predictions, test['labels'])  # find the error types
-    # recall_precision_curve(res_net_new, np.array(test['data']), np.array(test['labels']), np.array(predictions))  # recall-precision curve
+    recall_precision_curve(res_net_new, np.array(test['data']), np.array(test['labels']), np.array(predictions))  # recall-precision curve
+
 
 if __name__ == "__main__":
     main()
