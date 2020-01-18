@@ -56,7 +56,7 @@ def set_and_split_data():
         else:  # inserts the train set and it's augmentation image into train set
             train['data'].append(a)  # connect a to the big 4D array of input images
             train['labels'].append(labels_from_mat[i])  # divide the dictionary into labels vector of train
-            a_aug = Image.open(image_dir_file).transpose(Image.FLIP_LEFT_RIGHT)# create image augmentation
+            a_aug = Image.open(image_dir_file).transpose(Image.FLIP_LEFT_RIGHT) # create image augmentation
             aug_dir_file = data_path + "/" + str(i +1000) + ".jpeg"
             a_aug.save(aug_dir_file)
             a_aug = preprocess_input(np.expand_dims(image.img_to_array(image.load_img(aug_dir_file, target_size=(S, S))), axis=0))
@@ -68,7 +68,7 @@ def set_and_split_data():
     # changing the labels into numpy array for fitting
     train['labels'] = np.array(train['labels'])
     test['labels'] = np.array(test['labels'])
-
+    # split train to train and validation
     train_images, valid_images, train_labels, valid_labels = train_test_split(train['data'], train['labels'],
                                                                               test_size=0.33, shuffle=True)
     train = {
@@ -86,18 +86,20 @@ def set_and_split_data():
 def reconstruct_net(activation, optimizer, what_to_train):
     '''export the net without the last layer'''
     image_input = Input(shape=(S, S, 3))
-    basic_model = keras.applications.resnet_v2.ResNet50V2(include_top=True, weights='imagenet', input_tensor=image_input)
-    last_layer_minus_1 = basic_model.layers[-2].output
+    basic_model = keras.applications.resnet_v2.ResNet50V2(include_top=True, weights='imagenet', input_tensor=image_input) # extract the ResNet50V2 net
+    last_layer_minus_1 = basic_model.layers[-2].output # takes the last pooling layer
+    # preper our model, connected to the original net last pooling layer
     model_without_last_layer = Model(image_input, Dense(NUMBER_OF_CLASSES, activation=activation, name='output')(last_layer_minus_1))
-    model_without_last_layer.summary()
-    for layer in model_without_last_layer.layers[:what_to_train]:  # All layers are not trainable besides last one
+    model_without_last_layer.summary() # print the new model
+    for layer in model_without_last_layer.layers[:what_to_train]:  # decide what layers to train on
         layer.trainable = False
-    model_without_last_layer.compile(loss='binary_crossentropy', optimizer=optimizer, metrics=['accuracy'])
+    model_without_last_layer.compile(loss='binary_crossentropy', optimizer=optimizer, metrics=['accuracy']) # compile our net
     # model_without_last_layer.summary()
     return model_without_last_layer
 
 
-def train_model(res_net_basic, train_images, train_labels, valid_images, valid_labels, batch_size, epochs, verbose):     # hyper parameter epoches
+def train_model(res_net_basic, train_images, train_labels, valid_images, valid_labels, batch_size, epochs, verbose):
+    '''train the model'''
     return res_net_basic.fit(train_images, train_labels, batch_size=batch_size, epochs=epochs,
                          verbose=verbose, validation_data=(valid_images, valid_labels), shuffle=True)  # fitting the model
 
@@ -105,8 +107,10 @@ def train_model(res_net_basic, train_images, train_labels, valid_images, valid_l
 
 def test_model(model, test, batch_size, verbose):
     '''test and prints accuracy'''
+    # print accuracy for threshold 0.5
     loss, accuracy = model.evaluate(test['data'], test['labels'], batch_size=batch_size, verbose=verbose)
     print(f'The loss is {round(loss,4)}, the accuracy is {round(accuracy*100,4)}% and the error is {round(100 - accuracy*100,4)}%')
+    # print accuracy for chosen threshold
     new_predictions = keras.metrics.binary_accuracy(test['labels'], model.predict(test['data']), threshold=THRESHOLD)
     new_acc = _calc_accuracy(test['labels'], new_predictions)
     print(f'################################################')
@@ -116,11 +120,12 @@ def test_model(model, test, batch_size, verbose):
 
 
 def _calc_accuracy(real_labels, new_labels):
-   counter = 0
-   for i in range(len(new_labels)):
+    '''calcs the accuracy for the new threshold'''
+    counter = 0
+    for i in range(len(new_labels)):
        if real_labels[i] == new_labels[i]:
            counter = counter+1
-   return counter/len(new_labels)
+    return counter/len(new_labels)
 
 
 
@@ -141,7 +146,7 @@ def error_type(predictions, test_labels):
     score_type_2.sort(key=take_second,reverse=True)#sort by max
     min_score_type_1 = score_type_1[0:min(len(score_type_1),5)]
     max_score_type_2 = score_type_2[0:min(len(score_type_2),5)]
-    if len(min_score_type_1) != 0:
+    if len(min_score_type_1) != 0: # print error type 1
         for i in range(len(min_score_type_1)):
             print("Error type 1, ", "Index :" + str(take_first(min_score_type_1[i])), "Picture number and score: " + str(take_second(min_score_type_1[i])))
             image_dir_file= data_path + "/" + str(take_first(min_score_type_1[i])) + ".jpeg"
@@ -150,8 +155,7 @@ def error_type(predictions, test_labels):
             plt.show()
     else:
         print("There is no type 2 errors")
-
-    if len(max_score_type_2) != 0:
+    if len(max_score_type_2) != 0: # print error type 2
         for i in range(len(max_score_type_2)):
             print("Error type 2, ", "Index :" + str(take_first(max_score_type_2[i])), "Picture number and score: " + str(take_second(max_score_type_2[i])))
             image_dir_file = data_path + "/" + str(take_first(max_score_type_2[i])) + ".jpeg"
@@ -172,6 +176,7 @@ def take_first(elem):
 
 
 def create_plot(x, y, x_name):
+    '''create tunning plots'''
     plt.plot(x,y)
     plt.ylabel('Accuracy')
     plt.xlabel(x_name)
@@ -181,13 +186,15 @@ def create_plot(x, y, x_name):
 
 
 def _tune_activation(train, validation, batch_size, verbose):
+    '''tune the activation function,
+    each time we calc the model with different parameter and chose the parameter that gives the best accuracy'''
     acc = []
     activations = ['sigmoid', 'relu', 'softmax', 'elu', 'softsign', 'tanh']
     for activation in activations:
         print(f'activation = {activation}')
         model = reconstruct_net(activation, SGD(lr=0.01, decay=0.001), LAYERS_TO_TRAIN)
         hist = train_model(model, train['data'], train['labels'], validation['data'], validation['labels'], batch_size, EPOCHS, verbose)
-        acc.append(hist.history['val_accuracy'][-1])
+        acc.append(hist.history['val_accuracy'][-1]) # take the validation accuracy
     create_plot(activations, acc, 'Activation')
     print(f' tune activation acc = {acc}')
     chosen_activation = activations[acc.index(max(acc))]
@@ -196,12 +203,14 @@ def _tune_activation(train, validation, batch_size, verbose):
 
 
 def _tune_layer(train, validation,batch_size, verbose, chosen_activation):
+    '''tune the layers to train on,
+    each time we calc the model with different parameter and chose the parameter that gives the best accuracy'''
     acc = []
     for layer in [-1, -2, -3, -4, -5]:
         print(f'layer = {layer}')
         model = reconstruct_net(chosen_activation, SGD(lr=0.01, decay=0.001), layer)
         hist = train_model(model,train['data'], train['labels'], validation['data'], validation['labels'], batch_size, EPOCHS, verbose)
-        acc.append(hist.history['val_accuracy'][-1])
+        acc.append(hist.history['val_accuracy'][-1]) # take the validation accuracy
     create_plot(range(1,6), acc, 'Number of layers to train')
     print(f' tune layers acc = {acc}')
     chosen_layer = acc.index(max(acc))+1
@@ -210,12 +219,14 @@ def _tune_layer(train, validation,batch_size, verbose, chosen_activation):
 
 
 def _tune_epochs(train, validation,batch_size, verbose, chosen_activation, chosen_layer):
+    '''tune the ephocs,
+    each time we calc the model with different parameter and chose the parameter that gives the best accuracy'''
     acc = []
     for epochs in range(1, 8):
         print(f'epochs = {epochs}')
         model = reconstruct_net(chosen_activation, SGD(lr=0.01, decay=0.001), chosen_layer)
         hist = train_model(model, train['data'], train['labels'], validation['data'], validation['labels'], batch_size, epochs, verbose)
-        acc.append(hist.history['val_accuracy'][- 1])
+        acc.append(hist.history['val_accuracy'][- 1]) # take the validation accuracy
     accuracy_plot(hist)
     print(f' tune epochs acc = {acc}')
     chosen_epochs = acc.index(max(acc)) + 1
@@ -224,6 +235,8 @@ def _tune_epochs(train, validation,batch_size, verbose, chosen_activation, chose
 
 
 def _tune_gsd(train, validation,batch_size, verbose, chosen_activation, chosen_layer, chosen_epochs):
+    '''tune the GSD parameters,
+    each time we calc the model with different parameter and chose the parameter that gives the best accuracy'''
     acc = []
     learning_rates = [0.01, 0.03, 0.05]
     decays = [0.001, 0.005, 0.01, 0.1]
@@ -232,9 +245,10 @@ def _tune_gsd(train, validation,batch_size, verbose, chosen_activation, chosen_l
             print(f'leraning rate = {lr} and decay = {decay}')
             model = reconstruct_net(chosen_activation, SGD(lr=lr, decay=decay), chosen_layer)
             hist = train_model(model, train['data'], train['labels'], validation['data'], validation['labels'], batch_size, chosen_epochs, verbose)
-            acc.append(hist.history['val_accuracy'][- 1])
+            acc.append(hist.history['val_accuracy'][- 1]) # take the validation accuracy
     print(f' tune lr and decay acc = {acc}')
     print(f'max accuracy index is {acc.index(max(acc))}')
+    # extract the final values
     lr_index = round(acc.index(max(acc)) / 3)
     decey_index = int(acc.index(max(acc)) / lr_index)
     create_plot(range(1, 13), acc, 'SGD parameters')
@@ -243,10 +257,13 @@ def _tune_gsd(train, validation,batch_size, verbose, chosen_activation, chosen_l
 
 
 def _tune_threshold(val_labels, val_data, chosen_activation, lr, decay, chosen_layer, train, chosen_epochs):
+    '''tune the threshold on the validation only'''
     acc = []
     thresholds = [0.45, 0.5, 0.55, 0.57, 0.6, 0.65]
+    # train model
     model = reconstruct_net(chosen_activation, SGD(lr=lr, decay=decay), chosen_layer)
     train_model(model, train['data'], train['labels'], val_data, val_labels, BATCH_SIZE, chosen_epochs, VERBOSE)
+    # check different thresholds on the validation set as a test set
     for thrsh in thresholds:
         loss, accuracy = model.evaluate(val_data, val_labels, batch_size=BATCH_SIZE, verbose=VERBOSE)
         print(f'The loss is {round(loss, 4)}, the accuracy is {round(accuracy * 100, 4)}% and the error is {round(100 - accuracy * 100, 4)}%')
@@ -295,7 +312,7 @@ def show_images(images):
 
 
 def accuracy_plot(history):
-    # summarize history for accuracy
+    '''summarize history for accuracy of ephocs'''
     plt.plot(history.history['accuracy'])
     plt.plot(history.history['val_accuracy'])
     plt.title('model accuracy')
