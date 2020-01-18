@@ -243,13 +243,6 @@ def recall_precision_curve(model,test_samples, test_labels, pred):
     plt.fill_between(recall["micro"], precision["micro"], alpha=0.2, color='b', **step_kwargs)
     plt.xlabel('Recall'), plt.ylabel('Precision'), plt.title('Precision Recall Curve')
     plt.show()
-    # print(model)
-    # print(test_labels)
-    # average_precision = average_precision_score(test_labels, pred)
-    # print('Average precision-recall score: {0:0.2f}'.format(average_precision))
-    # disp = plot_precision_recall_curve(model, test_samples, np.array(test_labels))
-    # disp.ax_.set_title('2-class Precision-Recall curve: '
-    #                    'AP={0:0.2f}'.format(average_precision))
 
 
 def create_data_augmentation():
