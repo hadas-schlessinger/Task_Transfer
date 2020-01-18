@@ -278,7 +278,6 @@ def recall_precision_curve(test_labels, pred):
     '''creates precision curve'''
     precision = dict()
     recall = dict()
-   # for i in range(2):
     precision[0], recall[0], _ = precision_recall_curve(test_labels[:, 0], pred[:, 0])
     precision["micro"], recall["micro"], _ = precision_recall_curve(test_labels.ravel(), pred.ravel())
     fig = plt.figure()
