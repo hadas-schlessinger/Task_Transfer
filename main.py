@@ -36,6 +36,7 @@ LR = 0.01
 DECAY = 0.001
 LAYERS_TO_TRAIN = -1
 
+
 def set_and_split_data():
     '''set the images and split them'''
     train = {'data': [],
@@ -86,12 +87,12 @@ def set_and_split_data():
     return train, test
 
 
-def reconstruct_net(s, num_classes, activation, optimizer, what_to_train):
+def reconstruct_net(activation, optimizer, what_to_train):
     '''export the net without the last layer'''
-    image_input = Input(shape=(s, s, 3))
+    image_input = Input(shape=(S, S, 3))
     basic_model = keras.applications.resnet_v2.ResNet50V2(include_top=True, weights='imagenet', input_tensor=image_input)
     last_layer_minus_1 = basic_model.layers[-2].output
-    model_without_last_layer = Model(image_input, Dense(num_classes, activation=activation, name='output')(last_layer_minus_1))
+    model_without_last_layer = Model(image_input, Dense(NUMBER_OF_CLASSES, activation=activation, name='output')(last_layer_minus_1))
     model_without_last_layer.summary()
     for layer in model_without_last_layer.layers[:what_to_train]:  # All layers are not trainable besides last one
         layer.trainable = False
@@ -104,7 +105,6 @@ def train_model(res_net_basic, train, batch_size, epochs, verbose):     # hyper 
     train_images, valid_images, train_labels, valid_labels = train_test_split(train['data'], train['labels'], test_size=0.33, shuffle=True)
     return res_net_basic.fit(train_images, train_labels, batch_size=batch_size, epochs=epochs,
                          verbose=verbose, validation_data=(valid_images, valid_labels), shuffle=True)  # fitting the model
-
 
 
 def test_model(model, test, batch_size, verbose):
@@ -178,7 +178,7 @@ def tuning(train, batch_size, verbose):
     acc = []
     for epochs in range(1, 7):
         print(f'epochs = {epochs}')
-        model = reconstruct_net(S, NUMBER_OF_CLASSES,'sigmoid',SGD(lr=0.01, decay=0.001), LAYERS_TO_TRAIN)
+        model = reconstruct_net('sigmoid',SGD(lr=0.01, decay=0.001), LAYERS_TO_TRAIN)
         hist = train_model(model, train, batch_size, epochs, verbose)
         acc.append(hist.history['val_accuracy'][- 1])
     create_plot(range(1, 7), acc, 'Epochs')
@@ -189,7 +189,7 @@ def tuning(train, batch_size, verbose):
     activations = ['sigmoid', 'relu', 'softmax', 'elu', 'softsign', 'tanh']
     for activation in activations:
         print(f'activation = {activation}')
-        model = reconstruct_net(S, NUMBER_OF_CLASSES, activation, SGD(lr=0.01, decay=0.001), LAYERS_TO_TRAIN)
+        model = reconstruct_net(activation, SGD(lr=0.01, decay=0.001), LAYERS_TO_TRAIN)
         hist = train_model(model, train, batch_size, chosen_epochs, verbose)
         #val_acc = hist.history['val_accuracy']
         acc.append(hist.history['val_accuracy'][-1])
@@ -200,7 +200,7 @@ def tuning(train, batch_size, verbose):
 
     for layer in [-1, -2, -3, -4, -5]:
         print(f'layer = {layer}')
-        model = reconstruct_net(S, NUMBER_OF_CLASSES, chosen_activation, SGD(lr=0.01, decay=0.001), layer)
+        model = reconstruct_net(chosen_activation, SGD(lr=0.01, decay=0.001), layer)
         hist = train_model(model, train, batch_size, chosen_epochs, verbose)
         # val_acc = hist.history['val_accuracy']
         acc.append(hist.history['val_accuracy'][-1])
@@ -214,7 +214,7 @@ def tuning(train, batch_size, verbose):
     for lr in learning_rates:
         for decay in decays:
             print(f'leraning rate = {lr} and decay = {decay}')
-            model = reconstruct_net(S, NUMBER_OF_CLASSES, chosen_activation, SGD(lr=lr, decay=decay), chosen_layer)
+            model = reconstruct_net(chosen_activation, SGD(lr=lr, decay=decay), chosen_layer)
             hist = train_model(model, train, batch_size, chosen_epochs, verbose)
             # val_acc = hist.history['val_accuracy']
             acc.append(hist.history['val_accuracy'][- 1])
@@ -267,8 +267,8 @@ def main():
     np.random.seed(0)  # seed
     # create_data_augmentation()
     train, test = set_and_split_data()
-    # tuning(train, BATCH_SIZE, VERBOSE)
-    res_net_new = reconstruct_net(S, NUMBER_OF_CLASSES, 'sigmoid', SGD(lr = LR, decay = DECAY), LAYERS_TO_TRAIN)  # preparing the network
+    tuning(train, BATCH_SIZE, VERBOSE)
+    res_net_new = reconstruct_net('sigmoid', SGD(lr = LR, decay = DECAY), LAYERS_TO_TRAIN)  # preparing the network
     train_model(res_net_new, train, BATCH_SIZE, EPOCHS, VERBOSE) # train and validation stage
     predictions = test_model(res_net_new, test, BATCH_SIZE, VERBOSE)  # test stage
     error_type_array = error_type(predictions, test['labels'])  # find the error types
