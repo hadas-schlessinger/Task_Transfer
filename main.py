@@ -32,7 +32,7 @@ NEEDS_AUG = True
 LR = 0.03
 DECAY = 0.01
 LAYERS_TO_TRAIN = -3
-THRESHOLD = 0.41
+THRESHOLD = 0.42
 
 def set_and_split_data():
     '''set the images and split them'''
