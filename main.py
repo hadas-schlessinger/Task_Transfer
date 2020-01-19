@@ -56,8 +56,8 @@ def set_and_split_data():
         else:  # inserts the train set and it's augmentation image into train set
             train['data'].append(a)  # connect a to the big 4D array of input images
             train['labels'].append(labels_from_mat[i])  # divide the dictionary into labels vector of train
-            a_aug = Image.open(image_dir_file).transpose(Image.FLIP_LEFT_RIGHT) # create image augmentation
             aug_dir_file = data_path + "/" + str(i +1000) + ".jpeg"
+            a_aug = Image.open(image_dir_file).transpose(Image.FLIP_LEFT_RIGHT) # create image augmentation
             a_aug.save(aug_dir_file)
             a_aug = preprocess_input(np.expand_dims(image.img_to_array(image.load_img(aug_dir_file, target_size=(S, S))), axis=0))
             train['data'].append(a_aug)  # connect a to the big 4D array of input images
@@ -79,6 +79,7 @@ def set_and_split_data():
         'data': valid_images,
         'labels': valid_labels
     }
+    print(len(train['data']))
     return train, test, validation
 
 
