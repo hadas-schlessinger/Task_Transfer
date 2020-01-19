@@ -27,7 +27,7 @@ EPOCHS = 2
 VERBOSE = 1
 ACTIVATION = 'sigmoid'
 data_path = os.path.join(os.getcwd(), 'FlowerData')  # The images path
-Mat_file = os.path.join(os.getcwd(), 'FlowerData/FlowerDataLabels.mat')
+Mat_file = data_path + '/FlowerDataLabels.mat'
 NEEDS_AUG = True
 LR = 0.03
 DECAY = 0.01
@@ -79,7 +79,6 @@ def set_and_split_data():
         'data': valid_images,
         'labels': valid_labels
     }
-    print(len(train['data']))
     return train, test, validation
 
 
