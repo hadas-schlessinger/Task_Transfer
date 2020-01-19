@@ -32,7 +32,7 @@ NEEDS_AUG = True
 LR = 0.03
 DECAY = 0.01
 LAYERS_TO_TRAIN = -3
-THRESHOLD = 0.45
+THRESHOLD = 0.41
 
 def set_and_split_data():
     '''set the images and split them'''
@@ -40,19 +40,18 @@ def set_and_split_data():
              'labels': []}
     test = {'data': [],
             'labels': [],
-            'index':[]}
+            }
     # dictionary with variable names as keys, and loaded matrices as values.
     dictionary_labels = sio.loadmat(Mat_file, mdict=None, appendmat=True)
     labels_from_mat = np.transpose(dictionary_labels['Labels']).tolist()
 
     for i in range(len(labels_from_mat)):  # for filename in data path folder which is flowerData
-        image_dir_file = data_path + "/" + str(i + 1) + ".jpeg"
+        image_dir_file = data_path + "/" + str(i+1) + ".jpeg"
         # image read and converting it image pixels to a numpy array
         a = preprocess_input(np.expand_dims(image.img_to_array(image.load_img(image_dir_file, target_size=(S, S))), axis=0))
-        if i in test_images_indices:  # inserts the test set
+        if i+1 in test_images_indices:  # inserts the test set
             test['data'].append(a)  # accumulate image array
             test['labels'].append(labels_from_mat[i])  # divide the dictionary into labels vector of test
-            test['index'].append(i)
         else:  # inserts the train set and it's augmentation image into train set
             train['data'].append(a)  # connect a to the big 4D array of input images
             train['labels'].append(labels_from_mat[i])  # divide the dictionary into labels vector of train
@@ -259,7 +258,7 @@ def _tune_gsd(train, validation,batch_size, verbose, chosen_activation, chosen_l
 def _tune_threshold(val_labels, val_data, chosen_activation, lr, decay, chosen_layer, train, chosen_epochs):
     '''tune the threshold on the validation only'''
     acc = []
-    thresholds = [0.45, 0.5, 0.55, 0.57, 0.6, 0.65]
+    thresholds = [0.41, 0.42, 0.45, 0.5, 0.55, 0.57, 0.6]
     # train model
     model = reconstruct_net(chosen_activation, SGD(lr=lr, decay=decay), chosen_layer)
     train_model(model, train['data'], train['labels'], val_data, val_labels, BATCH_SIZE, chosen_epochs, VERBOSE)
