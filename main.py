@@ -137,9 +137,9 @@ def error_type(predictions, test_labels):
     for i in range(len(predictions)):
         predict_1 = predictions[i]
         index_i = test_images_indices[i]
-        if predict_1 <= 0.5 and test_labels[i] == 1:  # type 1: thought it's not flower(0) but it's (1)
+        if predict_1 <= THRESHOLD and test_labels[i] == 1:  # type 1: thought it's not flower(0) but it's (1)
             score_type_1.append((index_i, predict_1))
-        if predict_1 > 0.5 and test_labels[i] == 0:  # type 2: thought it's flower (1) but it's not (0)
+        if predict_1 > THRESHOLD and test_labels[i] == 0:  # type 2: thought it's flower (1) but it's not (0)
             score_type_2.append((index_i,predict_1))
     score_type_1.sort(key=take_second,reverse=False)#sort by min
     score_type_2.sort(key=take_second,reverse=True)#sort by max
