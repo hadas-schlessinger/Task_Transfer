@@ -27,7 +27,7 @@ EPOCHS = 2
 VERBOSE = 1
 ACTIVATION = 'sigmoid'
 data_path = os.path.join(os.getcwd(), 'FlowerData')  # The images path
-Mat_file = data_path + '/FlowerDataLabels.mat'
+mat_file = data_path + '/FlowerDataLabels.mat'
 NEEDS_AUG = True
 LR = 0.03
 DECAY = 0.01
@@ -42,7 +42,7 @@ def set_and_split_data():
             'labels': [],
             }
     # dictionary with variable names as keys, and loaded matrices as values.
-    dictionary_labels = sio.loadmat(Mat_file, mdict=None, appendmat=True)
+    dictionary_labels = sio.loadmat(mat_file, mdict=None, appendmat=True)
     labels_from_mat = np.transpose(dictionary_labels['Labels']).tolist()
 
     for i in range(len(labels_from_mat)):  # for filename in data path folder which is flowerData
@@ -81,15 +81,14 @@ def set_and_split_data():
     return train, test, validation
 
 
-
 def reconstruct_net(activation, optimizer, what_to_train):
     '''export the net without the last layer'''
     image_input = Input(shape=(S, S, 3))
     basic_model = keras.applications.resnet_v2.ResNet50V2(include_top=True, weights='imagenet', input_tensor=image_input) # extract the ResNet50V2 net
     last_layer_minus_1 = basic_model.layers[-2].output # takes the last pooling layer
-    # preper our model, connected to the original net last pooling layer
+    # compile our model, connected to the original net last pooling layer
     model_without_last_layer = Model(image_input, Dense(NUMBER_OF_CLASSES, activation=activation, name='output')(last_layer_minus_1))
-    model_without_last_layer.summary() # print the new model
+    # model_without_last_layer.summary()
     for layer in model_without_last_layer.layers[:what_to_train]:  # decide what layers to train on
         layer.trainable = False
     model_without_last_layer.compile(loss='binary_crossentropy', optimizer=optimizer, metrics=['accuracy']) # compile our net
@@ -103,18 +102,18 @@ def train_model(res_net_basic, train_images, train_labels, valid_images, valid_l
                          verbose=verbose, validation_data=(valid_images, valid_labels), shuffle=True)  # fitting the model
 
 
-
 def test_model(model, test, batch_size, verbose):
     '''test and prints accuracy'''
     # print accuracy for threshold 0.5
     loss, accuracy = model.evaluate(test['data'], test['labels'], batch_size=batch_size, verbose=verbose)
-    print(f'The loss is {round(loss,4)}, the accuracy is {round(accuracy*100,4)}% and the error is {round(100 - accuracy*100,4)}%')
+    print(f'The loss is {round(loss,4)}, the accuracy is {round(accuracy*100,4)}% '
+          f'and the error is {round(100 - accuracy*100,4)}%')
     # print accuracy for chosen threshold
     new_predictions = keras.metrics.binary_accuracy(test['labels'], model.predict(test['data']), threshold=THRESHOLD)
     new_acc = _calc_accuracy(test['labels'], new_predictions)
-    print(f'################################################')
+    print(f'################################################Calculating new threshold predictions and accuracy')
     print(f'the new prediction labels are {new_predictions}')
-    print(f'the new accuracy according to the new treshold is {round(new_acc*100,4)}%')
+    print(f'the new accuracy according to the new threshold is {round(new_acc*100,4)}%')
     return model.predict(test['data'])  # returns the predictions
 
 
@@ -122,10 +121,9 @@ def _calc_accuracy(real_labels, new_labels):
     '''calcs the accuracy for the new threshold'''
     counter = 0
     for i in range(len(new_labels)):
-       if real_labels[i] == new_labels[i]:
-           counter = counter+1
+        if real_labels[i] == new_labels[i]:
+            counter = counter+1
     return counter/len(new_labels)
-
 
 
 def error_type(predictions, test_labels):
@@ -141,29 +139,20 @@ def error_type(predictions, test_labels):
             score_type_1.append((index_i, predict_1))
         if predict_1 > THRESHOLD and test_labels[i] == 0:  # type 2: thought it's flower (1) but it's not (0)
             score_type_2.append((index_i,predict_1))
-    score_type_1.sort(key=take_second,reverse=False)#sort by min
-    score_type_2.sort(key=take_second,reverse=True)#sort by max
+    score_type_1.sort(key=take_second,reverse=False) # sort by min to order by worst error
+    score_type_2.sort(key=take_second,reverse=True) # sort by max to order by worst error
     min_score_type_1 = score_type_1[0:min(len(score_type_1),5)]
     max_score_type_2 = score_type_2[0:min(len(score_type_2),5)]
-    if len(min_score_type_1) != 0: # print error type 1
-        for i in range(len(min_score_type_1)):
-            print("Error type 1, ", "Index :" + str(take_first(min_score_type_1[i])), "Picture number and score: " + str(take_second(min_score_type_1[i])))
-            image_dir_file= data_path + "/" + str(take_first(min_score_type_1[i])) + ".jpeg"
-            im = cv2.imread(image_dir_file)  # image read
-            plt.imshow(im)
-            plt.show()
-    else:
-        print("There is no type 2 errors")
-    if len(max_score_type_2) != 0: # print error type 2
-        for i in range(len(max_score_type_2)):
-            print("Error type 2, ", "Index :" + str(take_first(max_score_type_2[i])), "Picture number and score: " + str(take_second(max_score_type_2[i])))
-            image_dir_file = data_path + "/" + str(take_first(max_score_type_2[i])) + ".jpeg"
-            im = cv2.imread(image_dir_file)  # image read
-            plt.imshow(im)
-            plt.show()
-    else:
-        print("There is no type 2 errors")
 
+    [print('Error type 1: ', f'Error index: {i+1},', 'Picture index :' + str(take_first(min_score_type_1[i])) +
+           ',', 'Score: ' + str(take_second(min_score_type_1[i])))
+     for i in range(len(min_score_type_1)) if len(min_score_type_1) != 0]
+    print("There is no type 1 errors") if len(min_score_type_1) == 0 else ""
+
+    [print('Error type 2: ', f'Error index: {i+1},', 'Picture index :' + str(take_first(max_score_type_2[i])) + ',',
+           'Score: ' + str(take_second(max_score_type_2[i])))
+     for i in range(len(max_score_type_2)) if len(max_score_type_2) != 0]
+    print("There is no type 1 errors") if len(max_score_type_2) == 0 else ""
 
 
 def take_second(elem):
@@ -276,6 +265,7 @@ def _tune_threshold(val_labels, val_data, chosen_activation, lr, decay, chosen_l
     create_plot(thresholds, acc, 'Threshold')
     return chosen_thresh
 
+
 def tuning(train, validation, batch_size, verbose):
     '''tune hyper parameters to improve the model'''
     chosen_activation = _tune_activation(train, validation, batch_size, verbose)
@@ -324,12 +314,18 @@ def accuracy_plot(history):
 ################# main ####################
 def main():
     np.random.seed(0)
+    print('##################################Step 1: splitting the data into train, test and validation sets ')
     train, test, validation = set_and_split_data()
     # tuning(train,validation, BATCH_SIZE, VERBOSE)
+    print('##################################Step 2: re-constructing the net to fit out mission')
     res_net_new = reconstruct_net(ACTIVATION, SGD(lr = LR, decay = DECAY), LAYERS_TO_TRAIN)  # preparing the network
+    print('##################################Step 3: training the model')
     train_model(res_net_new, train['data'], train['labels'], validation['data'], validation['labels'], BATCH_SIZE, EPOCHS, VERBOSE) # train stage
+    print('##################################Step 4: testing the model')
     predictions = test_model(res_net_new, test, BATCH_SIZE, VERBOSE)  # test stage
+    print('##################################Step 5: printing the largest errors')
     error_type(predictions, test['labels'])  # find the error types
+    print('##################################Step 6: extracting the precision curve')
     recall_precision_curve(np.array(test['labels']), np.array(predictions))  # recall-precision curve
 
 
