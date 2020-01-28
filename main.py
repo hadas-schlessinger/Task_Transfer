@@ -17,7 +17,7 @@ from keras.preprocessing import image
 from sklearn.model_selection import train_test_split
 
 
-test_images_indices = list(range(301,473))
+test_images_indices = list(range(301, 473))
 
 # env variables
 S = 224
@@ -32,7 +32,7 @@ NEEDS_AUG = True
 LR = 0.03
 DECAY = 0.01
 LAYERS_TO_TRAIN = -3
-THRESHOLD = 0.42
+THRESHOLD = 0.7
 
 def set_and_split_data():
     '''set the images and split them'''
@@ -109,12 +109,19 @@ def test_model(model, test, batch_size, verbose):
     print(f'The loss is {round(loss,4)}, the accuracy is {round(accuracy*100,4)}% '
           f'and the error is {round(100 - accuracy*100,4)}%')
     # print accuracy for chosen threshold
-    new_predictions = keras.metrics.binary_accuracy(test['labels'], model.predict(test['data']), threshold=THRESHOLD)
+    new_predictions = _fit_threshold(model.predict(test['data']), THRESHOLD)
+        #tf.keras.metrics.binary_accuracy(test['labels'], model.predict(test['data']), threshold=0.42)
     new_acc = _calc_accuracy(test['labels'], new_predictions)
     print(f'################################################Calculating new threshold predictions and accuracy')
     print(f'the new prediction labels are {new_predictions}')
     print(f'the new accuracy according to the new threshold is {round(new_acc*100,4)}%')
     return model.predict(test['data'])  # returns the predictions
+
+
+def _fit_threshold(predictions, threshold):
+    new_predictions = []
+    [new_predictions.append(0) if predictions[i] <= threshold else new_predictions.append(1) for i in range(len(predictions))]
+    return new_predictions
 
 
 def _calc_accuracy(real_labels, new_labels):
@@ -133,26 +140,23 @@ def error_type(predictions, test_labels):
     score_type_1 = []
     score_type_2 = []
     for i in range(len(predictions)):
-        predict_1 = predictions[i]
+        pred = predictions[i]
         index_i = test_images_indices[i]
-        if predict_1 <= THRESHOLD and test_labels[i] == 1:  # type 1: thought it's not flower(0) but it's (1)
-            score_type_1.append((index_i, predict_1))
-        if predict_1 > THRESHOLD and test_labels[i] == 0:  # type 2: thought it's flower (1) but it's not (0)
-            score_type_2.append((index_i,predict_1))
+        if pred <= THRESHOLD and test_labels[i] == 1:  # type 1: the net observed a non-flower although it's a flower (1)
+            score_type_1.append((index_i, pred))
+        if pred > THRESHOLD and test_labels[i] == 0:  # type 2: the net observed a flower although it's not a flower (0)
+            score_type_2.append((index_i,pred))
     score_type_1.sort(key=take_second,reverse=False) # sort by min to order by worst error
     score_type_2.sort(key=take_second,reverse=True) # sort by max to order by worst error
     min_score_type_1 = score_type_1[0:min(len(score_type_1),5)]
     max_score_type_2 = score_type_2[0:min(len(score_type_2),5)]
 
     [print('Error type 1: ', f'Error index: {i+1},', 'Picture index :' + str(take_first(min_score_type_1[i])) +
-           ',', 'Score: ' + str(take_second(min_score_type_1[i])))
-     for i in range(len(min_score_type_1)) if len(min_score_type_1) != 0]
-    print("There is no type 1 errors") if len(min_score_type_1) == 0 else ""
-
+           ',', 'Score: ' + str(take_second(min_score_type_1[i]))) if len(min_score_type_1) != 0 else print("There is no type 1 errors")
+     for i in range(len(min_score_type_1))]
     [print('Error type 2: ', f'Error index: {i+1},', 'Picture index :' + str(take_first(max_score_type_2[i])) + ',',
-           'Score: ' + str(take_second(max_score_type_2[i])))
-     for i in range(len(max_score_type_2)) if len(max_score_type_2) != 0]
-    print("There is no type 1 errors") if len(max_score_type_2) == 0 else ""
+           'Score: ' + str(take_second(max_score_type_2[i])))  if len(max_score_type_2) != 0 else print("There is no type 1 errors")
+     for i in range(len(max_score_type_2))]
 
 
 def take_second(elem):
@@ -247,7 +251,7 @@ def _tune_gsd(train, validation,batch_size, verbose, chosen_activation, chosen_l
 def _tune_threshold(val_labels, val_data, chosen_activation, lr, decay, chosen_layer, train, chosen_epochs):
     '''tune the threshold on the validation only'''
     acc = []
-    thresholds = [0.41, 0.42, 0.45, 0.5, 0.55, 0.57, 0.6]
+    thresholds = [0.42, 0.45, 0.5, 0.55, 0.6, 0.65, 0.7, 0.75, 0.8]
     # train model
     model = reconstruct_net(chosen_activation, SGD(lr=lr, decay=decay), chosen_layer)
     train_model(model, train['data'], train['labels'], val_data, val_labels, BATCH_SIZE, chosen_epochs, VERBOSE)
@@ -255,7 +259,8 @@ def _tune_threshold(val_labels, val_data, chosen_activation, lr, decay, chosen_l
     for thrsh in thresholds:
         loss, accuracy = model.evaluate(val_data, val_labels, batch_size=BATCH_SIZE, verbose=VERBOSE)
         print(f'The loss is {round(loss, 4)}, the accuracy is {round(accuracy * 100, 4)}% and the error is {round(100 - accuracy * 100, 4)}%')
-        new_predictions = keras.metrics.binary_accuracy(val_labels, model.predict(val_data), threshold=thrsh)
+        new_predictions = _fit_threshold(model.predict(val_data), thrsh)
+            #keras.metrics.binary_accuracy(val_labels, model.predict(val_data), threshold=thrsh)
         new_acc = _calc_accuracy(val_labels, new_predictions)
         print(f'the new accuracy is {new_acc}')
         acc.append(new_acc)
